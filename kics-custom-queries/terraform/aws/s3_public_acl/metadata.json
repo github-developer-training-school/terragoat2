@@ -1,0 +1,13 @@
+{
+  "id": "CUSTOM_KICS_S3_PUBLIC_ACL",
+  "title": "S3 bucket allows public ACL",
+  "description": "S3 buckets should not allow public ACLs such as public-read or public-read-write.",
+  "severity": "HIGH",
+  "platform": "Terraform",
+  "query-type": "and",
+  "category": "Storage",
+  "metadata": {
+    "references": ["https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html"],
+    "external_description": "Detects S3 buckets configured with public ACLs in Terraform code."
+  }
+}
