@@ -1,0 +1,36 @@
+name: 'KICS Scan'
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_path:
+        description: 'Path to scan (relative)'
+        required: true
+        default: 'terraform/'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  kics-scan:
+    name: 'Run KICS Scan'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v3
+
+      - name: 'Run KICS Scan'
+        uses: checkmarx/kics-github-action@v2.1.13
+        with:
+          path: '${{ github.event.inputs.terraform_path }}'
+          output_formats: 'sarif'
+          output_path: 'kics-results.sarif'
+          fail_on: 'high,medium'
+
+      - name: 'Upload KICS scan results to GitHub Security tab'
+        uses: github/codeql-action/upload-sarif@v3
+        if: ${{ always() }}
+        with:
+          sarif_file: 'kics-results.sarif'
