@@ -1,0 +1,40 @@
+name: 'Checkov Scan'
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_path:
+        description: 'Path to scan (relative)'
+        required: true
+        default: 'terraform/'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  checkov:
+    name: 'Run Checkov Scan'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+
+      - name: 'Run Checkov'
+        id: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: '${{ github.event.inputs.terraform_path }}'
+          framework: terraform
+          download_external_modules: true
+          external_checks_dirs: 'checkov-policies'
+          soft_fail: true
+          output_format: sarif
+          output_file_path: 'results.sarif'
+
+      - name: 'Upload SARIF file to GitHub Security tab'
+        uses: github/codeql-action/upload-sarif@v3
+        if: ${{ always() }}
+        with:
+          sarif_file: 'results.sarif'
