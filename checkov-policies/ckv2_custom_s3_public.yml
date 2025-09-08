@@ -1,0 +1,16 @@
+metadata:
+  id: "CKV2_CUSTOM_S3_PUBLIC"
+  name: "Ensure S3 buckets are not public"
+  category: "GENERAL_SECURITY"
+  severity: "HIGH"
+
+definition:
+  cond_type: "attribute"
+  resource_types:
+    - "aws_s3_bucket"
+  attribute: "acl"
+  operator: "contains"
+  value: "public"
+
+reframe: |
+  This check fails if the S3 bucket ACL contains the word 'public' (e.g. public-read).
