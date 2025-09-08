@@ -1,0 +1,16 @@
+metadata:
+  id: "CKV2_CUSTOM_SG_OPEN"
+  name: "Security group allows open ingress"
+  category: "NETWORKING"
+  severity: "CRITICAL"
+
+definition:
+  cond_type: "attribute"
+  resource_types:
+    - "aws_security_group"
+  attribute: "ingress.*.cidr_blocks"
+  operator: "contains"
+  value: "0.0.0.0/0"
+
+reframe: |
+  This check fails when any ingress rule in a security group allows 0.0.0.0/0.
