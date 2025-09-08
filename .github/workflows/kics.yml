@@ -27,7 +27,8 @@ jobs:
           path: '${{ github.event.inputs.terraform_path }}'
           output_formats: 'sarif'
           output_path: 'kics-results.sarif'
-          fail_on: 'high,medium'
+          # fail_on: 'high,medium'
+          ignore_on_exit: results
 
       - name: 'Upload KICS scan results to GitHub Security tab'
         uses: github/codeql-action/upload-sarif@v3

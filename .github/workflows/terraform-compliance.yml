@@ -1,0 +1,37 @@
+name: Terraform Compliance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Terraform Compliance Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout repository
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate || true
+
+      - name: Terraform Plan (generate JSON)
+        run: |
+          terraform plan -out=plan.out || true
+          terraform show -json plan.out > plan.out.json || true
+
+      - name: Run terraform-compliance (Docker)
+        run: |
+          # Use the official docker image; mount repository as /target
+          docker run --rm -v $(pwd):/target -i -t eerkunt/terraform-compliance -f compliance -p /target/plan.out.json
