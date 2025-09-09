@@ -6,7 +6,7 @@ on:
       terraform_path:
         description: 'Path to scan (relative)'
         required: true
-        default: 'terraform/'
+        default: 'terraform/aws'
 
 jobs:
   tflint:
@@ -37,6 +37,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 'Run TFLint scan'
-        # Run in the requested path for workflow_dispatch, otherwise default to terraform/
-        working-directory: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_path || 'terraform/' }}
+        # Run in the requested path for workflow_dispatch, otherwise default to terraform/aws
+        working-directory: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_path || 'terraform/aws' }}
         run: tflint --format compact

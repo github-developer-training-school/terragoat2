@@ -1,10 +1,12 @@
 name: 'TFLint Annotation Test'
 
 on:
-  pull_request:
-    branches:
-      - main
-      - master
+  workflow_dispatch:
+    inputs:
+      terraform_path:
+        description: 'Path to scan (relative)'
+        required: true
+        default: 'terraform/aws'
 
 jobs:
   test-annotations:
@@ -20,8 +22,15 @@ jobs:
       - name: Emit sample TFLint-like message
         # This intentionally prints a line that matches the matcher to create an annotation
         run: |
-          echo "terraform/aws/s3.tf:12:5: error: S3 bucket is public"
+          MSG="terraform/aws/s3.tf:12:5: error: S3 bucket is public"
+          echo "$MSG"
+          # Fail the step if the message is an error so the workflow marks the run as failed
+          if echo "$MSG" | grep -qi "\berror:\b"; then
+            echo "Detected error severity in sample message, failing step to surface annotation."
+            exit 1
+          fi
 
-      - name: Remove problem matcher
+      - if: always()
+        name: Remove problem matcher
         run: |
           echo "::remove-matcher owner=tflint-test::"

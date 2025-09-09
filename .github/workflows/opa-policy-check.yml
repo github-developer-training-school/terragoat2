@@ -6,7 +6,7 @@ on:
       terraform_path:
         description: 'Path to scan (relative)'
         required: true
-        default: 'terraform/'
+        default: 'terraform/aws'
 
 jobs:
   opa-check:

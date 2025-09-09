@@ -1,10 +1,12 @@
 name: Terraform Compliance
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      terraform_path:
+        description: 'Path to scan (relative)'
+        required: true
+        default: 'terraform/aws'
 
 jobs:
   test:
