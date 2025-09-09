@@ -1,3 +1,19 @@
+// Demo S3 bucket for TFLint annotation test
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_s3_bucket" "demo_bucket" {
+  bucket = "terragoat-demo-bucket-12345"
+  acl    = "private"
+
+  tags = {
+    Name        = "terragoat-demo"
+    Environment = "test"
+  }
+}
+
+// line 12: intentionally present so annotations can point here
 resource "aws_s3_bucket" "data" {
   # bucket is public
   # bucket is not encrypted
