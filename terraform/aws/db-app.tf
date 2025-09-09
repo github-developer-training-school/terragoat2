@@ -1,13 +1,13 @@
 resource "aws_db_instance" "default" {
 
-  name                   = var.dbname
+  db_name                = var.dbname
   engine                 = "mysql"
   option_group_name      = aws_db_option_group.default.name
   parameter_group_name   = aws_db_parameter_group.default.name
   db_subnet_group_name   = aws_db_subnet_group.default.name
   vpc_security_group_ids = [aws_security_group.default.id]
 
-  identifier              = "rds-${local.resource_prefix.value}"
+  identifier             = "rds-${local.resource_prefix.value}"
   engine_version          = "8.0" # Latest major version 
   instance_class          = "db.t3.micro"
   allocated_storage       = 20
@@ -96,7 +96,7 @@ resource "aws_db_parameter_group" "default" {
 
 resource "aws_db_subnet_group" "default" {
   name        = "sg-${local.resource_prefix.value}"
-  subnet_ids  = ["${aws_subnet.web_subnet.id}", "${aws_subnet.web_subnet2.id}"]
+  subnet_ids  = [aws_subnet.web_subnet.id, aws_subnet.web_subnet2.id]
   description = "Terraform DB Subnet Group"
 
   tags = merge({
@@ -138,7 +138,7 @@ resource "aws_security_group_rule" "ingress" {
   from_port         = "3306"
   to_port           = "3306"
   protocol          = "tcp"
-  cidr_blocks       = ["${aws_vpc.web_vpc.cidr_block}"]
+  cidr_blocks       = [aws_vpc.web_vpc.cidr_block]
   security_group_id = aws_security_group.default.id
 }
 
@@ -148,7 +148,7 @@ resource "aws_security_group_rule" "egress" {
   to_port           = 0
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = "${aws_security_group.default.id}"
+  security_group_id = aws_security_group.default.id
 }
 
 
