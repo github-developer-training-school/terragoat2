@@ -1,0 +1,27 @@
+name: 'TFLint Annotation Test'
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  test-annotations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Register problem matcher
+        run: |
+          echo "::add-matcher::.github/problem-matchers/tflint-test-matcher.json"
+
+      - name: Emit sample TFLint-like message
+        # This intentionally prints a line that matches the matcher to create an annotation
+        run: |
+          echo "terraform/aws/s3.tf:12:5: error: S3 bucket is public"
+
+      - name: Remove problem matcher
+        run: |
+          echo "::remove-matcher owner=tflint-test::"

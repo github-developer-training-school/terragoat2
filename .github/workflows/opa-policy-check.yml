@@ -1,12 +1,12 @@
 name: 'OPA Policy Check'
 
 on:
-  pull_request:
-    branches:
-      - main
-      - master
-    paths:
-      - '**.tf'
+  workflow_dispatch:
+    inputs:
+      terraform_path:
+        description: 'Path to scan (relative)'
+        required: true
+        default: 'terraform/'
 
 jobs:
   opa-check:
