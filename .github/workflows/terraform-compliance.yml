@@ -37,7 +37,12 @@ jobs:
         env:
           TF_IN_AUTOMATION: 1
         run: |
-          terraform plan -input=false -out=plan.out || true
+          # Re-run non-interactive init here to ensure providers are installed
+          terraform init -backend=false -input=false -reconfigure || true
+          # Debug: show .terraform contents so logs reveal whether init succeeded
+          ls -la .terraform || true
+          # Run plan (don't fail the job if plan can't complete)
+          terraform plan -refresh=false -input=false -out=plan.out || true
           if [ -f plan.out ]; then
             terraform show -json plan.out > plan.out.json || echo '{}' > plan.out.json
           else
@@ -46,11 +51,13 @@ jobs:
 
       - name: Run terraform-compliance (Docker)
         run: |
-          # Use the official docker image; mount repository path as /target
-          # Use absolute path via github workspace to avoid invalid docker volume name
-          TARGET_PATH="${{ github.workspace }}/${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
-          # Ensure the plan JSON exists and is readable by the container
-          if [ ! -f "$TARGET_PATH/plan.out.json" ]; then
-            echo '{}' > "$TARGET_PATH/plan.out.json"
+          # Mount repository root so the container can find the compliance directory
+          REPO_ROOT="${{ github.workspace }}"
+          TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
+          # Ensure the plan JSON exists in the terraform folder
+          if [ ! -f "$REPO_ROOT/$TF_PATH/plan.out.json" ]; then
+            echo '{}' > "$REPO_ROOT/$TF_PATH/plan.out.json"
           fi
-          docker run --rm -v "$TARGET_PATH":/target -e TF_IN_AUTOMATION=1 eerkunt/terraform-compliance -f compliance -p /target/plan.out.json
+          # Point terraform-compliance at the compliance directory inside the repo
+          docker run --rm -v "$REPO_ROOT":/repo -e TF_IN_AUTOMATION=1 \
+            eerkunt/terraform-compliance -f /repo/compliance -p /repo/$TF_PATH/plan.out.json
