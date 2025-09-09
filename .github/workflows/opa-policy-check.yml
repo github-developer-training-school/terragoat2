@@ -63,6 +63,9 @@ jobs:
             perl -0777 -pe 's/provider\s*"aws"\s*\{.*?\}//gs' -i "$TMPDIR/providers.tf"
             echo 'provider "aws" {' >> "$TMPDIR/providers.tf"
             echo '  region = "us-east-1"' >> "$TMPDIR/providers.tf"
+            echo '  skip_credentials_validation = true' >> "$TMPDIR/providers.tf"
+            echo '  skip_get_ec2_platforms = true' >> "$TMPDIR/providers.tf"
+            echo '  skip_requesting_account_id = true' >> "$TMPDIR/providers.tf"
             echo '}' >> "$TMPDIR/providers.tf"
           fi
 
