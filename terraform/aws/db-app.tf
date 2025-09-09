@@ -263,7 +263,7 @@ cat << EnD > /tmp/dbinfo.inc
 define('DB_SERVER', '${aws_db_instance.default.endpoint}');
 define('DB_USERNAME', '${aws_db_instance.default.username}');
 define('DB_PASSWORD', '${var.password}');
-define('DB_DATABASE', '${aws_db_instance.default.name}');
+define('DB_DATABASE', '${aws_db_instance.default.db_name}');
 ?>
 EnD
 sudo mv /tmp/dbinfo.inc /var/www/inc 

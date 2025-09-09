@@ -44,7 +44,8 @@ jobs:
           TF_IN_AUTOMATION: 1
         run: |
           # Run plan but never fail the workflow if plan can't complete (no creds etc.)
-          terraform plan -input=false -out=tfplan.binary || true
+          # Add -refresh=false to avoid remote state refresh requiring backend access
+          terraform plan -input=false -refresh=false -out=tfplan.binary || true
 
       - name: 'Convert plan to JSON'
         working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
@@ -57,6 +58,9 @@ jobs:
           else
             echo '{}' > tfplan.json
           fi
+          # Print size and head for debugging
+          ls -l tfplan.json || true
+          head -n 200 tfplan.json || true
 
       - name: 'Set up OPA'
         uses: open-policy-agent/setup-opa@v2
@@ -66,17 +70,18 @@ jobs:
       - name: 'Run OPA evaluation (non-failing)'
         run: |
           TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
-          TF_PLAN_JSON="$TF_PATH/tfplan.json"
-          # Evaluate policies but do not fail the workflow. Print any violations if present.
-          if [ -f "$TF_PLAN_JSON" ]; then
-            results=$(opa eval --data policy/ --input "$TF_PLAN_JSON" 'data.terraform.deny') || true
-          else
-            results=$(opa eval --data policy/ --input <(echo '{}') 'data.terraform.deny') || true
+          TF_PLAN_JSON="${{ github.workspace }}/$TF_PATH/tfplan.json"
+          echo "OPA: using plan file $TF_PLAN_JSON"
+          if [ ! -f "$TF_PLAN_JSON" ]; then
+            echo '{}' > "$TF_PLAN_JSON"
           fi
+          # Evaluate policies but do not let OPA command bubble an error to the job
+          results=$(opa eval --data policy/ --input "$TF_PLAN_JSON" 'data.terraform.deny') || true
 
           if [ -n "$results" ]; then
             echo "OPA Policy Violations Found:"
             echo "$results"
+            # Keep the step non-failing; you can change to 'exit 1' to fail on violations
           else
             echo "OPA policies passed or no data to evaluate."
           fi

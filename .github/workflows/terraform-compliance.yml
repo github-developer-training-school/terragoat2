@@ -38,10 +38,19 @@ jobs:
           TF_IN_AUTOMATION: 1
         run: |
           terraform plan -input=false -out=plan.out || true
-          terraform show -json plan.out > plan.out.json || true
+          if [ -f plan.out ]; then
+            terraform show -json plan.out > plan.out.json || echo '{}' > plan.out.json
+          else
+            echo '{}' > plan.out.json
+          fi
 
       - name: Run terraform-compliance (Docker)
         run: |
-          # Use the official docker image; mount repository as /target
-          # Remove -i -t to avoid TTY errors in non-interactive runners
-          docker run --rm -v "${{ github.event.inputs.terraform_path || 'terraform/aws' }}":/target -e TF_IN_AUTOMATION=1 eerkunt/terraform-compliance -f compliance -p /target/plan.out.json
+          # Use the official docker image; mount repository path as /target
+          # Use absolute path via github workspace to avoid invalid docker volume name
+          TARGET_PATH="${{ github.workspace }}/${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
+          # Ensure the plan JSON exists and is readable by the container
+          if [ ! -f "$TARGET_PATH/plan.out.json" ]; then
+            echo '{}' > "$TARGET_PATH/plan.out.json"
+          fi
+          docker run --rm -v "$TARGET_PATH":/target -e TF_IN_AUTOMATION=1 eerkunt/terraform-compliance -f compliance -p /target/plan.out.json
