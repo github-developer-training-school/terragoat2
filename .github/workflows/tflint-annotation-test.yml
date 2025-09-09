@@ -18,19 +18,10 @@ jobs:
       - name: Register problem matcher
         run: |
           echo "::add-matcher::.github/problem-matchers/tflint-test-matcher.json"
-
       - name: Emit sample TFLint-like message
         # This intentionally prints a line that matches the matcher to create an annotation
         run: |
-          MSG="terraform/aws/s3.tf:12:5: error: S3 bucket is public"
-          echo "$MSG"
-          # Fail the step if the message is an error so the workflow marks the run as failed
-          if echo "$MSG" | grep -qi "\berror:\b"; then
-            echo "Detected error severity in sample message, failing step to surface annotation."
-            exit 1
-          fi
-
-      - if: always()
-        name: Remove problem matcher
+          echo "terraform/aws/s3.tf:12:5: error: S3 bucket is public"
+      - name: Remove problem matcher
         run: |
           echo "::remove-matcher owner=tflint-test::"
