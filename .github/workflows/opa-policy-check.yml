@@ -17,12 +17,19 @@ jobs:
       - name: 'Checkout code'
         uses: actions/checkout@v4
 
+      - name: 'Debug: list terraform path'
+        run: |
+          TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
+          echo "Listing files in $TF_PATH"
+          ls -la "$TF_PATH" || true
+
       - name: 'Set up Terraform'
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
 
       - name: 'Terraform Init'
+        working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
         run: terraform init
         # Add environment variables for cloud provider credentials if needed for the plan
         # env:
@@ -30,11 +37,13 @@ jobs:
         #   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: 'Terraform Plan'
+        working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
         run: |
           # Run plan but never fail the workflow if plan can't complete (no creds etc.)
           terraform plan -out=tfplan.binary || true
 
       - name: 'Convert plan to JSON'
+        working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
         run: |
           # Convert plan to JSON if possible; if not, create an empty JSON to let OPA run harmlessly
           if [ -f tfplan.binary ]; then
@@ -50,8 +59,14 @@ jobs:
 
       - name: 'Run OPA evaluation (non-failing)'
         run: |
+          TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
+          TF_PLAN_JSON="$TF_PATH/tfplan.json"
           # Evaluate policies but do not fail the workflow. Print any violations if present.
-          results=$(opa eval --data policy/ --input tfplan.json 'data.terraform.deny') || true
+          if [ -f "$TF_PLAN_JSON" ]; then
+            results=$(opa eval --data policy/ --input "$TF_PLAN_JSON" 'data.terraform.deny') || true
+          else
+            results=$(opa eval --data policy/ --input <(echo '{}') 'data.terraform.deny') || true
+          fi
 
           if [ -n "$results" ]; then
             echo "OPA Policy Violations Found:"

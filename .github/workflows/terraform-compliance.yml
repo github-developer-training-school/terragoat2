@@ -24,7 +24,9 @@ jobs:
 
       - name: Terraform Init
         working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
-        run: terraform init
+        env:
+          TF_IN_AUTOMATION: 1
+        run: terraform init -backend=false -input=false
 
       - name: Terraform Validate
         working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
@@ -32,8 +34,10 @@ jobs:
 
       - name: Terraform Plan (generate JSON)
         working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
+        env:
+          TF_IN_AUTOMATION: 1
         run: |
-          terraform plan -out=plan.out || true
+          terraform plan -input=false -out=plan.out || true
           terraform show -json plan.out > plan.out.json || true
 
       - name: Run terraform-compliance (Docker)
