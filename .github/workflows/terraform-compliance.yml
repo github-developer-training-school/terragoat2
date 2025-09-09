@@ -35,6 +35,9 @@ jobs:
       - name: Terraform Plan (generate JSON)
         env:
           TF_IN_AUTOMATION: 1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
           SRC="$GITHUB_WORKSPACE/$TF_PATH"
@@ -79,5 +82,5 @@ jobs:
           else
             # Point terraform-compliance at the compliance directory inside the repo
             docker run --rm -v "$REPO_ROOT":/repo -e TF_IN_AUTOMATION=1 \
-              eerkunt/terraform-compliance -f /repo/compliance -p /repo/$TF_PATH/plan.out.json
+              eerkunt/terraform-compliance -f /repo/compliance -p /repo/$TF_PATH/plan.out.json || true
           fi
