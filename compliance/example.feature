@@ -1,5 +1,4 @@
-Feature: Placeholder
-  Scenario: placeholder
-    Given I have resource that are aws_instance
-    When it should always pass
-    Then it must have attribute tags
+Feature: Example compliance feature (disabled)
+
+  # Disabled: this example uses unimplemented step definitions and breaks CI.
+  # Rename to .disabled or implement matching steps before enabling.

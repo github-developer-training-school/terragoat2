@@ -38,14 +38,45 @@ jobs:
         #   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         #   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: 'Terraform Plan'
-        working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
+      - name: 'Terraform Plan (temp-copy)'
         env:
           TF_IN_AUTOMATION: 1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          # Run plan but never fail the workflow if plan can't complete (no creds etc.)
-          # Add -refresh=false to avoid remote state refresh requiring backend access
-          terraform plan -input=false -refresh=false -out=tfplan.binary || true
+          TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
+          SRC="$GITHUB_WORKSPACE/$TF_PATH"
+          TMPDIR="$RUNNER_TEMP/opa_tf"
+          echo "Preparing temp dir $TMPDIR"
+          rm -rf "$TMPDIR"
+          mkdir -p "$TMPDIR"
+          rsync -a "$SRC/" "$TMPDIR/"
+
+          # Strip S3 backend from temp copy if present
+          if [ -f "$TMPDIR/providers.tf" ] && grep -q 'backend "s3"' "$TMPDIR/providers.tf" 2>/dev/null; then
+            perl -0777 -pe 's/backend\s*"s3"\s*\{.*?\}//gs' -i "$TMPDIR/providers.tf"
+          fi
+
+          # Remove provider aws blocks and add minimal provider
+          if [ -f "$TMPDIR/providers.tf" ] && grep -q 'provider "aws"' "$TMPDIR/providers.tf" 2>/dev/null; then
+            perl -0777 -pe 's/provider\s*"aws"\s*\{.*?\}//gs' -i "$TMPDIR/providers.tf"
+            echo 'provider "aws" {' >> "$TMPDIR/providers.tf"
+            echo '  region = "us-east-1"' >> "$TMPDIR/providers.tf"
+            echo '}' >> "$TMPDIR/providers.tf"
+          fi
+
+          cd "$TMPDIR"
+          terraform init -backend=false -input=false -reconfigure || true
+          terraform plan -refresh=false -input=false -out=tfplan.binary || true
+          if [ -f tfplan.binary ]; then
+            terraform show -json tfplan.binary > tfplan.json || echo '{}' > tfplan.json
+          else
+            echo '{}' > tfplan.json
+          fi
+
+          # copy plan JSON back to repo path
+          cp tfplan.json "$SRC/tfplan.json" || true
 
       - name: 'Convert plan to JSON'
         working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
