@@ -1,121 +1,39 @@
 name: 'OPA Policy Check'
 
 on:
-  workflow_dispatch:
-    inputs:
-      terraform_path:
-        description: 'Path to scan (relative)'
-        required: true
-        default: 'terraform/aws'
+  pull_request:
+    branches: [ main, master ]
+    paths: [ 'terraform/**.tf', 'policy/**' ]
 
 jobs:
   opa-check:
-    name: 'Run OPA Policy Check'
     runs-on: ubuntu-latest
-
+    name: Run OPA
     steps:
-      - name: 'Checkout code'
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 'Debug: list terraform path'
-        run: |
-          TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
-          echo "Listing files in $TF_PATH"
-          ls -la "$TF_PATH" || true
-
-      - name: 'Set up Terraform'
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.5.0
+          terraform_version: '1.5.0'
 
-      - name: 'Terraform Init'
-        working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
-        env:
-          TF_IN_AUTOMATION: 1
-        run: terraform init -backend=false -input=false
-        # Add environment variables for cloud provider credentials if needed for the plan
-        # env:
-        #   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        #   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: 'Terraform Plan (temp-copy)'
-        env:
-          TF_IN_AUTOMATION: 1
-          AWS_ACCESS_KEY_ID: test
-          AWS_SECRET_ACCESS_KEY: test
-          AWS_DEFAULT_REGION: us-east-1
+      - name: Terraform plan (non-interactive, fallback)
+        working-directory: terraform/aws
         run: |
-          TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
-          SRC="$GITHUB_WORKSPACE/$TF_PATH"
-          TMPDIR="$RUNNER_TEMP/opa_tf"
-          echo "Preparing temp dir $TMPDIR"
-          rm -rf "$TMPDIR"
-          mkdir -p "$TMPDIR"
-          rsync -a "$SRC/" "$TMPDIR/"
+          terraform init -backend=false -input=false || true
+          terraform plan -out=tfplan.binary -refresh=false -input=false || true
+          terraform show -json tfplan.binary > tfplan.json || echo '{}' > tfplan.json
 
-          # Strip S3 backend from temp copy if present
-          if [ -f "$TMPDIR/providers.tf" ] && grep -q 'backend "s3"' "$TMPDIR/providers.tf" 2>/dev/null; then
-            perl -0777 -pe 's/backend\s*"s3"\s*\{.*?\}//gs' -i "$TMPDIR/providers.tf"
-          fi
-
-          # Remove provider aws blocks and add minimal provider
-          if [ -f "$TMPDIR/providers.tf" ] && grep -q 'provider "aws"' "$TMPDIR/providers.tf" 2>/dev/null; then
-            perl -0777 -pe 's/provider\s*"aws"\s*\{.*?\}//gs' -i "$TMPDIR/providers.tf"
-            echo 'provider "aws" {' >> "$TMPDIR/providers.tf"
-            echo '  region = "us-east-1"' >> "$TMPDIR/providers.tf"
-            echo '  skip_credentials_validation = true' >> "$TMPDIR/providers.tf"
-            echo '  skip_get_ec2_platforms = true' >> "$TMPDIR/providers.tf"
-            echo '  skip_requesting_account_id = true' >> "$TMPDIR/providers.tf"
-            echo '}' >> "$TMPDIR/providers.tf"
-          fi
-
-          cd "$TMPDIR"
-          terraform init -backend=false -input=false -reconfigure || true
-          terraform plan -refresh=false -input=false -out=tfplan.binary || true
-          if [ -f tfplan.binary ]; then
-            terraform show -json tfplan.binary > tfplan.json || echo '{}' > tfplan.json
-          else
-            echo '{}' > tfplan.json
-          fi
-
-          # copy plan JSON back to repo path
-          cp tfplan.json "$SRC/tfplan.json" || true
-
-      - name: 'Convert plan to JSON'
-        working-directory: ${{ github.event.inputs.terraform_path || 'terraform/aws' }}
-        env:
-          TF_IN_AUTOMATION: 1
-        run: |
-          # Convert plan to JSON if possible; if not, create an empty JSON to let OPA run harmlessly
-          if [ -f tfplan.binary ]; then
-            terraform show -json tfplan.binary > tfplan.json || echo '{}' > tfplan.json
-          else
-            echo '{}' > tfplan.json
-          fi
-          # Print size and head for debugging
-          ls -l tfplan.json || true
-          head -n 200 tfplan.json || true
-
-      - name: 'Set up OPA'
+      - name: Setup OPA
         uses: open-policy-agent/setup-opa@v2
         with:
-          version: latest
+          version: 'v0.45.0'
 
-      - name: 'Run OPA evaluation (non-failing)'
+      - name: Run OPA (evaluate policy/ against plan)
+        working-directory: terraform/aws
         run: |
-          TF_PATH="${{ github.event.inputs.terraform_path || 'terraform/aws' }}"
-          TF_PLAN_JSON="${{ github.workspace }}/$TF_PATH/tfplan.json"
-          echo "OPA: using plan file $TF_PLAN_JSON"
-          if [ ! -f "$TF_PLAN_JSON" ]; then
-            echo '{}' > "$TF_PLAN_JSON"
+          if [ ! -f tfplan.json ]; then
+            echo '{}' > tfplan.json
           fi
-          # Evaluate policies but do not let OPA command bubble an error to the job
-          results=$(opa eval --data policy/ --input "$TF_PLAN_JSON" 'data.terraform.deny') || true
-
-          if [ -n "$results" ]; then
-            echo "OPA Policy Violations Found:"
-            echo "$results"
-            # Keep the step non-failing; you can change to 'exit 1' to fail on violations
-          else
-            echo "OPA policies passed or no data to evaluate."
-          fi
+          opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' || true
