@@ -43,17 +43,10 @@ jobs:
         run: |
           TRIVY_IMAGE=aquasec/trivy:0.52.2
 
-          # Preferred: use `iac --input` producing SARIF
-          docker run --rm -v "$PWD":/work -w /work ${TRIVY_IMAGE} iac --input tfplan.json -f sarif -o trivy.sarif && exit 0 || true
-
-          # Next: `config --input` producing SARIF
-          docker run --rm -v "$PWD":/work -w /work ${TRIVY_IMAGE} config --input tfplan.json -f sarif -o trivy.sarif && exit 0 || true
-
-          # Older: `config <file>` with explicit scanner and SARIF output
-          docker run --rm -v "$PWD":/work -w /work ${TRIVY_IMAGE} config tfplan.json --raw-config-scanners terraformplan-json -f sarif -o trivy.sarif && exit 0 || true
-
-          # Final fallback: plain config <file> with SARIF output
-          docker run --rm -v "$PWD":/work -w /work ${TRIVY_IMAGE} config tfplan.json -f sarif -o trivy.sarif || true
+          # Use the Trivy config command against the Terraform plan JSON and
+          # output SARIF. This form is compatible with the pinned image and
+          # produces `trivy.sarif` for artifact upload / code scanning.
+          docker run --rm -v "$PWD":/work -w /work ${TRIVY_IMAGE} config tfplan.json -f sarif -o trivy.sarif
 
       - name: Upload tfplan.json and Trivy SARIF
         uses: actions/upload-artifact@v4
