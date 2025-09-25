@@ -7,6 +7,10 @@ jobs:
   trivy-plan-scan:
     name: Generate Terraform plan and scan with Trivy
     runs-on: ubuntu-latest
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_ACCESS_KEY_ID: 'DUMMY'
+      AWS_SECRET_ACCESS_KEY: 'DUMMY'
 
     steps:
       - name: Checkout repository
