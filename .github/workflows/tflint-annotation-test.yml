@@ -7,6 +7,8 @@ on:
         description: 'Path to scan (relative)'
         required: true
         default: 'terraform/aws'
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   test-annotations:
@@ -17,11 +19,20 @@ jobs:
 
       - name: Register problem matcher
         run: |
-          echo "::add-matcher::.github/problem-matchers/tflint-test-matcher.json"
-      - name: Emit sample TFLint-like message
-        # This intentionally prints a line that matches the matcher to create an annotation
+          echo "::add-matcher::${{ github.workspace }}/.github/problem-matchers/tflint-compact.json"
+          echo "::add-matcher::${{ github.workspace }}/.github/problem-matchers/tflint-test-matcher.json"
+      - name: Run test tflint scan
         run: |
-          echo "terraform/aws/s3.tf:12:5: error: S3 bucket is public"
+          TARGET_PATH=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_path || 'terraform/aws' }}
+          echo "Scanning path: $TARGET_PATH"
+          tflint --format compact "$TARGET_PATH" |
+          sed -E "s/^(\s*(Error|Warning|Info):\s*)?([^/[:space:]]+):/\1$TARGET_PATH\/\3:/" | tee tflint.out
+      - name: Show sample of TFLint output for debugging
+        run: |
+          echo "--- TFLint output (first 50 lines) ---"
+          head -n 50 tflint.out || true
+          echo "--- End TFLint output ---"
       - name: Remove problem matcher
         run: |
+          echo "::remove-matcher owner=tflint-compact::"
           echo "::remove-matcher owner=tflint-test::"
