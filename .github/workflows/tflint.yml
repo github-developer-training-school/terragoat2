@@ -27,8 +27,11 @@ jobs:
 
       - name: 'Set up TFLint'
         uses: terraform-linters/setup-tflint@v5
+        id: setup_tflint
         with:
           tflint_version: v0.52.0
+          # enable wrapper so we can read stdout/stderr/exitcode from the action
+          tflint_wrapper: true
 
       - name: 'Initialize TFLint'
         run: tflint --init
@@ -36,7 +39,35 @@ jobs:
           # Use secrets.GITHUB_TOKEN to avoid rate-limiting when downloading plugins
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 'Register TFLint problem matcher'
+        # Register our custom matcher so tflint compact output becomes annotations in the UI
+        run: echo "::add-matcher::${{ github.workspace }}/.github/problem-matchers/tflint-compact.json"
+
       - name: 'Run TFLint scan'
+        id: tflint
         # Run in the requested path for workflow_dispatch, otherwise default to terraform/aws
         working-directory: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_path || 'terraform/aws' }}
+        # Default behavior: let tflint exit non-zero on issues so the step (and job) fails.
         run: tflint --format compact
+
+      # Optional alternatives (commented out):
+      # 1) Step-level continue-on-error (never fail the job):
+      # - name: 'Run TFLint scan (continue-on-error)'
+      #   run: tflint --format compact
+      #   continue-on-error: true
+
+      # 2) Capture outputs with wrapper and decide later (advanced):
+      # - name: 'Run TFLint scan (capture outputs)'
+      #   id: tflint
+      #   run: tflint --format compact || true
+      # - name: 'Show TFLint outputs (wrapper)'
+      #   if: always()
+      #   run: |
+      #     echo "TFLint exitcode from wrapper: ${{ steps.tflint.outputs.exitcode }}"
+      #     echo "--- stdout ---"
+      #     echo "${{ steps.tflint.outputs.stdout }}"
+      #     echo "--- stderr ---"
+      #     echo "${{ steps.tflint.outputs.stderr }}"
+      # - name: 'Fail if TFLint found issues (conditional)'
+      #   if: ${{ steps.tflint.outputs.exitcode != '0' }}
+      #   run: exit ${{ steps.tflint.outputs.exitcode }}
