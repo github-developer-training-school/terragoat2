@@ -16,13 +16,18 @@ provider "aws" {
 resource "aws_s3_bucket" "trivy_demo_public_bucket" {
   bucket = "trivy-demo-example-bucket-terraform-plan"
   acl    = "public-read"
-
-  versioning {
-    enabled = true
-  }
-
+  
   tags = {
     Environment = "trivy-demo"
     Purpose     = "trivy-plan-demo"
+  }
+}
+
+# Separate versioning resource (preferred over inline 'versioning' block)
+resource "aws_s3_bucket_versioning" "trivy_demo_versioning" {
+  bucket = aws_s3_bucket.trivy_demo_public_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
   }
 }
