@@ -1,14 +1,21 @@
 name: 'OPA Policy Check'
 
 on:
-  pull_request:
-    branches: [ main, master ]
-    paths: [ 'terraform/**.tf', 'policy/**' ]
+  workflow_dispatch:
+    inputs:
+      path:
+        description: 'Path to Terraform directory to scan (relative)'
+        required: false
+        default: 'trivy-demo'
 
 jobs:
   opa-check:
     runs-on: ubuntu-latest
     name: Run OPA
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_ACCESS_KEY_ID: 'DUMMY'
+      AWS_SECRET_ACCESS_KEY: 'DUMMY'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,7 +26,7 @@ jobs:
           terraform_version: '1.5.0'
 
       - name: Terraform plan (non-interactive, fallback)
-        working-directory: terraform/aws
+        working-directory: ${{ github.event.inputs.path }}
         run: |
           terraform init -backend=false -input=false || true
           terraform plan -out=tfplan.binary -refresh=false -input=false || true
@@ -31,9 +38,19 @@ jobs:
           version: 'v0.45.0'
 
       - name: Run OPA (evaluate policy/ against plan)
-        working-directory: terraform/aws
+        working-directory: ${{ github.event.inputs.path }}
         run: |
           if [ ! -f tfplan.json ]; then
             echo '{}' > tfplan.json
           fi
-          opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' || true
+          # Evaluate policies under /policy and write results to opa-results.txt
+          opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' -f pretty > opa-results.txt || true
+
+      - name: Upload OPA results
+        uses: actions/upload-artifact@v4
+        with:
+          name: opa-results
+          path: |
+            ${{ github.event.inputs.path }}/tfplan.json
+            ${{ github.event.inputs.path }}/opa-results.txt
+          if-no-files-found: warn

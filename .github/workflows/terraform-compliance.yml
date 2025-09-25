@@ -1,18 +1,21 @@
 name: 'Terraform Compliance'
 
 on:
-  pull_request:
-    branches:
-      - main
-      - master
-    paths:
-      - 'terraform/**.tf'
-      - 'features/**'
+  workflow_dispatch:
+    inputs:
+      path:
+        description: 'Path to Terraform directory to scan (relative)'
+        required: false
+        default: 'trivy-demo'
 
 jobs:
   compliance-check:
     name: 'Run terraform-compliance'
     runs-on: ubuntu-latest
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
+      AWS_ACCESS_KEY_ID: 'DUMMY'
+      AWS_SECRET_ACCESS_KEY: 'DUMMY'
 
     steps:
       - name: 'Checkout code'
@@ -24,27 +27,51 @@ jobs:
           terraform_version: '1.5.0'
 
       - name: 'Terraform Init (no backend)'
-        working-directory: terraform/aws
+        working-directory: ${{ github.event.inputs.path }}
         run: terraform init -backend=false -input=false
 
       - name: 'Terraform Plan and Show'
-        working-directory: terraform/aws
+        working-directory: ${{ github.event.inputs.path }}
         id: plan
         run: |
           terraform plan -out=plan.out -refresh=false -input=false || true
           terraform show -json plan.out > plan.json || echo '{}' > plan.json
 
       - name: 'Run terraform-compliance (demo)'
+        working-directory: ${{ github.event.inputs.path }}
         run: |
-          # Use simplest flow: if plan.json exists, run terraform-compliance pointing at features/
-          TF_DIR=terraform/aws
+          # If plan.json exists under trivy-demo, print a demo message and copy to root features path
+          TF_DIR=${{ github.event.inputs.path }}
           if [ -f "$TF_DIR/plan.json" ]; then
-            echo "Found plan.json; running terraform-compliance against features/"
-            # Use the official action if available (demo); keep non-fatal for demo purposes
-            echo "terraform-compliance run (demo) - plan: $TF_DIR/plan.json features: ./features/"
+            echo "Found plan.json; running terraform-compliance against features/ (demo)"
+            # For demo, just output the existence and copy plan.json to artifacts
+            cp $TF_DIR/plan.json . || true
           else
-            echo "No plan.json found; create empty placeholder and exit (demo mode)"
-            mkdir -p "$TF_DIR"
-            echo '{}' > "$TF_DIR/plan.json"
+            echo "No plan.json found; creating placeholder"
+            echo '{}' > $TF_DIR/plan.json
           fi
+
+      - name: Install terraform-compliance
+        run: |
+          python -m pip install --upgrade pip
+          pip install terraform-compliance
+
+      - name: Run terraform-compliance against plan.json
+        working-directory: ${{ github.event.inputs.path }}
+        run: |
+          # terraform-compliance expects a plan file and a features directory. For demo we run features/ from repo root.
+          if [ ! -f plan.json ]; then
+            echo '{}' > plan.json
+          fi
+          # Run terraform-compliance and write output to a file
+          terraform-compliance -p plan.json -f ../features/ > tf-compliance-output.txt || true
+
+      - name: Upload terraform-compliance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-compliance-artifacts
+          path: |
+            ${{ github.event.inputs.path }}/plan.json
+            ${{ github.event.inputs.path }}/tf-compliance-output.txt
+          if-no-files-found: warn
 
