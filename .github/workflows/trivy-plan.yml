@@ -1,0 +1,42 @@
+name: Trivy scan Terraform plan
+
+on:
+  workflow_dispatch
+
+jobs:
+  trivy-plan-scan:
+    name: Generate Terraform plan and scan with Trivy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.0'
+
+      - name: Change to demo directory
+        run: |
+          cd trivy-demo
+          pwd
+
+      - name: Terraform init
+        working-directory: trivy-demo
+        run: terraform init -backend=false
+
+      - name: Terraform plan (binary)
+        working-directory: trivy-demo
+        run: terraform plan -out=tfplan.binary
+
+      - name: Convert plan to JSON
+        working-directory: trivy-demo
+        run: terraform show -json tfplan.binary > tfplan.json
+
+      - name: Download Trivy image and scan plan JSON
+        working-directory: trivy-demo
+        run: |
+          # Use Trivy container to scan the plan JSON. This avoids installing trivy on the runner.
+          docker run --rm -v "$PWD":/work -w /work aquasec/trivy:latest config --input tfplan.json || \
+            docker run --rm -v "$PWD":/work -w /work aquasec/trivy:latest iac --input tfplan.json
