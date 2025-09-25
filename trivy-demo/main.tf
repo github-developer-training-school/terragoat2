@@ -11,16 +11,27 @@ provider "aws" {
   # No credentials are set here on purpose. 'terraform plan' will still produce
   # a plan for this static resource (Terraform may warn about unknown credentials
   # depending on your providers and terraform version).
+  # In CI we disable provider checks that would attempt to call AWS APIs so
+  # terraform plan can run without valid credentials.
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
 }
 
 resource "aws_s3_bucket" "trivy_demo_public_bucket" {
   bucket = "trivy-demo-example-bucket-terraform-plan"
-  acl    = "public-read"
+  # 'acl' is deprecated on the aws_s3_bucket resource; create a separate
+  # aws_s3_bucket_acl resource below to model a public ACL for the demo.
   
   tags = {
     Environment = "trivy-demo"
     Purpose     = "trivy-plan-demo"
   }
+}
+
+resource "aws_s3_bucket_acl" "trivy_demo_acl" {
+  bucket = aws_s3_bucket.trivy_demo_public_bucket.id
+  acl    = "public-read"
 }
 
 # Separate versioning resource (preferred over inline 'versioning' block)
