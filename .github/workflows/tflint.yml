@@ -7,6 +7,14 @@ on:
         description: 'Path to scan (relative)'
         required: true
         default: 'terraform/aws'
+  # Run on pull requests so annotations show up in PRs
+  pull_request:
+    types: [opened, synchronize, reopened]
+  # Optional: also run on push to main branches
+  push:
+    branches:
+      - master
+      - main
 
 jobs:
   tflint:
