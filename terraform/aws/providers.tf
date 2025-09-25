@@ -1,18 +1,9 @@
-
-provider "aws" {
-  profile = var.profile
-  region  = var.region
-}
-
-provider "aws" {
-  alias      = "plain_text_access_keys_provider"
-  region     = "us-west-1"
-  access_key = "AKIAIOSFODNN7EXAMPLE"
-  secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-}
-
 terraform {
-  backend "s3" {
-    encrypt = true
-  }
+  # Intentionally left without required_version and required_providers
+  # to trigger terraform_required_version and terraform_required_providers
+}
+
+provider "aws" {
+  # interpolation-only expression here will trigger a deprecated-interpolation warning
+  region = "${var.region}"
 }
