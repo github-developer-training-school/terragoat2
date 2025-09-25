@@ -52,18 +52,13 @@ jobs:
       # - name: 'Run TFLint scan (capture outputs)'
       #   id: tflint
       #   run: tflint --format compact || true
-      - name: 'Register TFLint problem matcher'
-        run: |
-          echo "::add-matcher::${{ github.workspace }}/.github/problem-matchers/tflint-compact.json"
-          echo "::add-matcher::${{ github.workspace }}/.github/problem-matchers/tflint-test-matcher.json"
-
-      - name: 'Run TFLint (compact + matcher)'
+      - name: 'Run TFLint (compact)'
         id: tflint
         run: |
           TARGET_PATH=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_path || 'terraform/aws' }}
           echo "Scanning path: $TARGET_PATH"
-          # Run tflint and prefix bare filenames with TARGET_PATH so the matcher can resolve file paths
-          tflint --format compact "$TARGET_PATH" | sed -E "s/^(\s*(Error|Warning|Info):\s*)?([^/[:space:]]+):/\1$TARGET_PATH\/\3:/" | tee tflint.out
+          # Run tflint compact and save output. No problem-matchers are used.
+          tflint --format compact "$TARGET_PATH" | tee tflint.out
 
       - name: 'Show sample of TFLint output for debugging'
         if: always()
@@ -71,9 +66,3 @@ jobs:
           echo "--- TFLint output (first 50 lines) ---"
           head -n 50 tflint.out || true
           echo "--- End TFLint output ---"
-
-      - name: 'Remove problem matchers'
-        if: always()
-        run: |
-          echo "::remove-matcher owner=tflint-compact::"
-          echo "::remove-matcher owner=tflint-test::"
