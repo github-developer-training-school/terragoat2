@@ -29,6 +29,7 @@ jobs:
           iac_version: 'v14'
           iac_dir: '${{ github.event.inputs.terraform_path }}'
           policy_type: 'aws'
+          policy_path: 'terrascan-custom-policies'
           sarif_upload: true
           only_warn: true
 
