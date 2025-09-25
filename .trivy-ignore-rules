@@ -1,0 +1,9 @@
+# .trivy-ignore-rules
+# List Trivy rule IDs (one per line) to ignore in SARIF filtering.
+# Lines starting with '#' are comments and ignored.
+# Example rule IDs (replace with real rule IDs from your scan):
+# TRIVY-2025-0001
+# TRIVY-2025-0002
+
+# Add any rule IDs you want to ignore below:
+

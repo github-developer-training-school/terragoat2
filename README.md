@@ -199,6 +199,36 @@ To create the Service Account:
 
 To create the credentials:
 1. Sign into your GCP project, go to `IAM` > `Service Accounts` and click on the relevant Service Account.
+
+## Trivy SARIF filtering (optional)
+
+The repository includes an optional SARIF filtering feature used by the Trivy IaC scanning workflow. This allows maintainers to remove known/accepted findings from the SARIF file before it is uploaded to GitHub Code Scanning.
+
+How it works
+- The workflow can read a file named `.trivy-ignore-rules` in the repository root. Each non-comment line should contain a Trivy rule ID to ignore (one per line).
+- You can also provide environment variables in the workflow or runner:
+  - `TRIVY_IGNORED_RULES` — comma-separated Trivy rule IDs to ignore (e.g. `TRIVY-2025-0001,TRIVY-2025-0002`).
+  - `TRIVY_IGNORED_TAGS` — comma-separated tags to ignore (e.g. `terraform,cloudformation`). These are matched against the SARIF `properties.tags` field.
+- The filter merges rules from the file and environment variables, and removes matching `results` entries from `trivy-results.sarif` before upload.
+
+Example `.trivy-ignore-rules` file
+```
+# .trivy-ignore-rules
+# Ignore the following Trivy findings (replace with real rule IDs from your scans)
+TRIVY-2025-0001
+TRIVY-2025-0002
+```
+
+Example workflow env usage
+```yaml
+env:
+  TRIVY_IGNORED_RULES: TRIVY-2025-0001,TRIVY-2025-0002
+  TRIVY_IGNORED_TAGS: terraform,config
+```
+
+Notes
+- The filtering step is optional and can be toggled in the workflow. Removing results from SARIF prevents Code Scanning alerts from being created for those items — use with care.
+- If Trivy changes the SARIF structure, the filter may need adjustment. If you hit issues, paste a small `results` array (redacted if necessary) and we can adapt the filter.
 2. Click `ADD KEY` > `Create new key` > `JSON` and click `CREATE`. This will create a `.json` file and download it to your computer.
 
 We recommend saving the key with a nicer name than the auto-generated one (i.e. `terragoat_credentials.json`), and storing the resulting JSON file inside `terraform/gcp` directory of terragoat.
