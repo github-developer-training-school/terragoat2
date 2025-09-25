@@ -41,6 +41,6 @@ jobs:
       - name: Download Trivy image and scan plan JSON
         working-directory: trivy-demo
         run: |
-          # Use Trivy container to scan the plan JSON. This avoids installing trivy on the runner.
-          docker run --rm -v "$PWD":/work -w /work aquasec/trivy:latest config --input tfplan.json || \
-            docker run --rm -v "$PWD":/work -w /work aquasec/trivy:latest iac --input tfplan.json
+          # Try the newer `iac --input` command first (newer trivy), fall back to `config <file>` for older versions.
+          docker run --rm -v "$PWD":/work -w /work aquasec/trivy:latest iac --input tfplan.json || \
+            docker run --rm -v "$PWD":/work -w /work aquasec/trivy:latest config tfplan.json
