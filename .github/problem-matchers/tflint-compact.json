@@ -4,7 +4,7 @@
       "owner": "tflint-compact",
       "pattern": [
         {
-          "regexp": "^(.+?):(\\d+):(\\d+):\\s*(Error|Warning|Info)?\\s*-?\\s*(.*?)(?:\\s*\\(([^)]+)\\))?$",
+          "regexp": "^(?:\\s*(?:Error|Warning|Info):\\s*)?(.+?):(\\d+):(\\d+):\\s*(Error|Warning|Info)?\\s*-?\\s*(.*?)(?:\\s*\\(([^)]+)\\))?$",
           "file": 1,
           "line": 2,
           "column": 3,

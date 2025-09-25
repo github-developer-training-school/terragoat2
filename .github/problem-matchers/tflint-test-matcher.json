@@ -4,7 +4,7 @@
       "owner": "tflint-test",
       "pattern": [
         {
-          "regexp": "^(.+\\.tf):(\\d+):(\\d+):\\s*(error|warning|notice):\\s*(.+)$",
+          "regexp": "^(?:\\s*(?:Error|Warning|Info):\\s*)?(.+\\.tf):(\\d+):(\\d+):\\s*(error|warning|notice|Error|Warning|Info)?:\\s*(.+)$",
           "file": 1,
           "line": 2,
           "column": 3,
