@@ -1,4 +1,4 @@
-name: 'Terraform Compliance'
+name: Terraform Compliance
 
 on:
   workflow_dispatch:
