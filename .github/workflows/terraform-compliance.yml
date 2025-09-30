@@ -36,11 +36,8 @@ jobs:
         run: |
           terraform plan -out=plan.out -refresh=false -input=false || true
           terraform show -json plan.out > plan.tmp 2>&1 || true
-          # If the terraform show output prints the invoked command on the same line, remove that leading prefix first
-          # (i.e. lines that look like '/home/.../terraform-bin show -json plan.out')
-          awk 'NR==1 && /terraform-bin show/ { sub(/^[^\n]*terraform-bin show[^\n]*/,"") ; print; next } { print }' plan.tmp > plan.cleaned_prefix || true
-          # Extract JSON beginning at the first '{' or '[' robustly from the cleaned file
-          python -c "import sys; s=open('plan.cleaned_prefix','rb').read().decode('utf-8','ignore'); ps=[i for i in (s.find('{'),s.find('[')) if i!=-1]; sys.stdout.write('' if not ps else s[min(ps):])" > plan.candidate || true
+          # Robust extraction: use helper script to extract JSON from plan.tmp into plan.candidate
+          python .github/scripts/extract_json.py plan.tmp plan.candidate || true
           echo "--- debug: head (first 300 bytes) of plan.tmp ---" || true
           head -c 300 plan.tmp || true
           echo "--- debug: head (first 300 bytes) of plan.candidate ---" || true
@@ -195,5 +192,9 @@ jobs:
           path: |
             ${{ github.event.inputs.path }}/plan.json
             ${{ github.event.inputs.path }}/tf-compliance-output.txt
+            ${{ github.event.inputs.path }}/plan.candidate
+            ${{ github.event.inputs.path }}/plan.raw
+            ${{ github.event.inputs.path }}/plan.extracted
+            ${{ github.event.inputs.path }}/plan.tmp
           if-no-files-found: warn
 
