@@ -47,6 +47,8 @@ jobs:
           echo "Running OPA eval against tfplan.json using policies in ../policy/"
           # Output JSON for reliable parsing, and also save a pretty text copy
           opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' -f json > opa-results.json
+          # Debug: produce an explanation trace to help see why rules didn't match
+          opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' --explain full -f pretty > opa-explain.txt || true
           # Pretty-print for human logs
           jq '.' opa-results.json > opa-results.txt || cat opa-results.json > opa-results.txt
           echo "OPA JSON result saved to opa-results.json"
