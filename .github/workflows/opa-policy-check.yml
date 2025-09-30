@@ -30,7 +30,15 @@ jobs:
         run: |
           terraform init -backend=false -input=false || true
           terraform plan -out=tfplan.binary -refresh=false -input=false || true
-          terraform show -json tfplan.binary > tfplan.json || echo '{}' > tfplan.json
+          # Capture terraform show output into a temp file and validate it's JSON. If not, fall back to an empty JSON object.
+          terraform show -json tfplan.binary > tfplan.tmp 2>&1 || true
+          if jq -e . tfplan.tmp >/dev/null 2>&1; then
+            mv tfplan.tmp tfplan.json
+          else
+            echo "Warning: terraform show did not produce valid JSON; saving raw output to tfplan.raw and using '{}' for tfplan.json" >&2
+            mv tfplan.tmp tfplan.raw || true
+            echo '{}' > tfplan.json
+          fi
 
       - name: Setup OPA
         uses: open-policy-agent/setup-opa@v2

@@ -104,11 +104,18 @@ jobs:
           python -V || true
           pip show terraform-compliance || true
 
-          echo "--- debug: verify installed custom steps BEFORE running terraform-compliance ---"
-          python "$GITHUB_WORKSPACE/.github/scripts/verify_custom_steps.py"
+          echo "--- debug: prepare local overlay for custom terraform-compliance steps ---"
+          OVERLAY_DIR="$GITHUB_WORKSPACE/.tfcomp_extra"
+          mkdir -p "$OVERLAY_DIR/terraform_compliance/steps"
+          if [ -f "$GITHUB_WORKSPACE/compliance/steps/custom_steps.py" ]; then
+            cp "$GITHUB_WORKSPACE/compliance/steps/custom_steps.py" "$OVERLAY_DIR/terraform_compliance/steps/custom_steps.py"
+            echo "Copied custom_steps.py to overlay: $OVERLAY_DIR/terraform_compliance/steps/custom_steps.py"
+          else
+            echo "Warning: custom_steps.py not found in repo at compliance/steps/custom_steps.py" >&2
+          fi
 
-          # Now run terraform-compliance and capture exit code properly
-          terraform-compliance -p plan.json -f ../features/ 2>&1 | tee tf-compliance-output.txt
+          echo "--- debug: run terraform-compliance with PYTHONPATH overlay ---"
+          PYTHONPATH="$OVERLAY_DIR:$PYTHONPATH" terraform-compliance -p plan.json -f ../features/ 2>&1 | tee tf-compliance-output.txt
           rc=${PIPESTATUS[0]:-0}
           echo "terraform-compliance exit code: $rc"
           exit $rc
