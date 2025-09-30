@@ -32,19 +32,25 @@ jobs:
           terraform plan -out=tfplan.binary -refresh=false -input=false || true
           # Capture terraform show output into a temp file
           terraform show -json tfplan.binary > tfplan.tmp 2>&1 || true
-          # Attempt to strip any leading non-JSON lines (some wrappers print the command before JSON)
-          awk 'BEGIN{p=0} { if (p==0 && $0 ~ /^[[:space:]]*[{[]/) p=1; if (p==1) print }' tfplan.tmp > tfplan.candidate || true
-          if jq -e . tfplan.candidate >/dev/null 2>&1; then
+          # Attempt to strip any leading non-JSON bytes and extract JSON starting at the first '{' or '['.
+          # Use perl to be robust against leading non-JSON lines or partial prefixes.
+          perl -0777 -ne 'if (/(.*?)([\[\{].*)/s){print $2} else {print ""}' tfplan.tmp > tfplan.candidate || true
+          echo "--- debug: head (first 300 bytes) of tfplan.tmp ---" || true
+          head -c 300 tfplan.tmp || true
+          echo "--- debug: head (first 300 bytes) of tfplan.candidate ---" || true
+          head -c 300 tfplan.candidate || true
+          echo "--- debug: sizes (bytes) of tfplan.tmp and tfplan.candidate ---"
+          wc -c tfplan.tmp || true
+          wc -c tfplan.candidate || true
+          # Prefer the raw tmp if it is valid JSON, otherwise fall back to the extracted candidate
+          if jq -e . tfplan.tmp >/dev/null 2>&1; then
+            mv tfplan.tmp tfplan.json
+          elif jq -e . tfplan.candidate >/dev/null 2>&1; then
             mv tfplan.candidate tfplan.json
           else
-            # If candidate failed, check raw tmp directly
-            if jq -e . tfplan.tmp >/dev/null 2>&1; then
-              mv tfplan.tmp tfplan.json
-            else
-              echo "Warning: terraform show did not produce valid JSON; saving raw output to tfplan.raw and using '{}' for tfplan.json" >&2
-              mv tfplan.tmp tfplan.raw || true
-              echo '{}' > tfplan.json
-            fi
+            echo "Warning: terraform show did not produce valid JSON; saving raw output to tfplan.raw and using '{}' for tfplan.json" >&2
+            mv tfplan.tmp tfplan.raw || true
+            echo '{}' > tfplan.json
           fi
 
       - name: Setup OPA

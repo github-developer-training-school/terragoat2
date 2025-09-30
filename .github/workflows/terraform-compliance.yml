@@ -36,17 +36,24 @@ jobs:
         run: |
           terraform plan -out=plan.out -refresh=false -input=false || true
           terraform show -json plan.out > plan.tmp 2>&1 || true
-          # Attempt to strip leading non-JSON lines and validate
-          awk 'BEGIN{p=0} { if (p==0 && $0 ~ /^[[:space:]]*[{[]/) p=1; if (p==1) print }' plan.tmp > plan.candidate || true
-          if jq -e . plan.candidate >/dev/null 2>&1; then
+          # Extract JSON beginning at the first '{' or '[' using perl; this is more robust
+          perl -0777 -ne 'if (/(.*?)([\[\{].*)/s){print $2} else {print ""}' plan.tmp > plan.candidate || true
+          echo "--- debug: head (first 300 bytes) of plan.tmp ---" || true
+          head -c 300 plan.tmp || true
+          echo "--- debug: head (first 300 bytes) of plan.candidate ---" || true
+          head -c 300 plan.candidate || true
+          echo "--- debug: sizes (bytes) of plan.tmp and plan.candidate ---" || true
+          wc -c plan.tmp || true
+          wc -c plan.candidate || true
+          # Prefer the raw tmp if it is valid JSON, otherwise fall back to the extracted candidate
+          if jq -e . plan.tmp >/dev/null 2>&1; then
+            mv plan.tmp plan.json
+          elif jq -e . plan.candidate >/dev/null 2>&1; then
             mv plan.candidate plan.json
           else
-            if jq -e . plan.tmp >/dev/null 2>&1; then
-              mv plan.tmp plan.json
-            else
-              mv plan.tmp plan.raw || true
-              echo '{}' > plan.json
-            fi
+            echo "Warning: terraform show did not produce valid JSON; saving raw output to plan.raw and using '{}' for plan.json" >&2
+            mv plan.tmp plan.raw || true
+            echo '{}' > plan.json
           fi
 
       - name: 'Run terraform-compliance (demo)'
@@ -68,12 +75,34 @@ jobs:
           # Ensure features dir exists
           mkdir -p "$ROOT/features"
 
-          # For a failing demo: copy plan.json and remove the Environment tag from aws_s3_bucket resources
-          if [ -f "$TF_DIR/plan.json" ]; then
-            jq '(.resource_changes[] | select(.type=="aws_s3_bucket") | .change.after.tags) |= (if . == null then {} else del(.Environment) end)' "$TF_DIR/plan.json" > "$ROOT/features/plan.json" || cp "$TF_DIR/plan.json" "$ROOT/features/plan.json"
-            echo "Copied modified plan.json to features/ (Environment tag removed for demo failure)"
+          # For a failing demo: pick the best available plan JSON source (candidate/raw/json)
+          SOURCE=""
+          # prefer candidate if present and valid, then raw, then existing plan.json
+          if [ -f "$TF_DIR/plan.candidate" ] && jq -e . "$TF_DIR/plan.candidate" >/dev/null 2>&1; then
+            SOURCE="$TF_DIR/plan.candidate"
+          elif [ -f "$TF_DIR/plan.raw" ] && jq -e . "$TF_DIR/plan.raw" >/dev/null 2>&1; then
+            SOURCE="$TF_DIR/plan.raw"
+          elif [ -f "$TF_DIR/plan.json" ] && jq -e . "$TF_DIR/plan.json" >/dev/null 2>&1; then
+            SOURCE="$TF_DIR/plan.json"
+          fi
+
+          if [ -n "$SOURCE" ]; then
+            echo "Using plan source: $SOURCE"
+            echo "--- debug: head (first 300 bytes) of chosen source ---"
+            head -c 300 "$SOURCE" || true
+            # Safely remove the Environment tag from aws_s3_bucket resources for both plan-style and show-style shapes.
+            jq '
+              (if .resource_changes != null then .resource_changes |= map(
+                if .type=="aws_s3_bucket" then (.change.after.tags = ((.change.after.tags // {}) | del(.Environment)) ) else . end
+              ) else . end)
+              |
+              (if (.planned_values? and .planned_values.root_module?) then .planned_values.root_module.resources |= map(
+                if .type=="aws_s3_bucket" then (.values.tags = ((.values.tags // {}) | del(.Environment)) ) else . end
+              ) else . end)
+            ' "$SOURCE" > "$ROOT/features/plan.json" || cp "$SOURCE" "$ROOT/features/plan.json"
+            echo "Copied modified plan (demo) to features/plan.json"
           else
-            echo "No plan.json to modify; creating empty placeholder"
+            echo "No valid plan source found; creating empty placeholder in features/plan.json"
             echo '{}' > "$ROOT/features/plan.json"
           fi
 

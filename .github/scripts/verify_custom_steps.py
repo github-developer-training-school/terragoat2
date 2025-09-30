@@ -18,18 +18,39 @@ def main():
         steps_dir = os.path.join(site_dir, 'steps')
         print('Detected terraform_compliance steps dir:', steps_dir)
         if os.path.isdir(steps_dir):
+            # Print top-level files
             for name in sorted(os.listdir(steps_dir)):
                 path = os.path.join(steps_dir, name)
                 print('--- FILE:', name, '---')
-                try:
-                    with open(path, 'r') as fh:
-                        print(fh.read())
-                except Exception as e:
-                    print('Could not read', path, e)
-            # Check specifically for our custom_steps.py and return non-zero if missing
-            target = os.path.join(steps_dir, 'custom_steps.py')
-            if not os.path.isfile(target):
-                print('ERROR: custom_steps.py not found at', target)
+                if os.path.isfile(path):
+                    try:
+                        with open(path, 'r') as fh:
+                            print(fh.read())
+                    except Exception as e:
+                        print('Could not read', path, e)
+                else:
+                    print('(skipping directory)', path)
+
+            # Also inspect the given/ subdirectory if present
+            given_dir = os.path.join(steps_dir, 'given')
+            if os.path.isdir(given_dir):
+                print('--- Listing steps/given ---')
+                for name in sorted(os.listdir(given_dir)):
+                    path = os.path.join(given_dir, name)
+                    print('--- GIVEN FILE:', name, '---')
+                    try:
+                        with open(path, 'r') as fh:
+                            print(fh.read())
+                    except Exception as e:
+                        print('Could not read', path, e)
+
+            # Check for our custom_steps.py in either location
+            possible_targets = [
+                os.path.join(steps_dir, 'custom_steps.py'),
+                os.path.join(steps_dir, 'given', 'custom_steps.py'),
+            ]
+            if not any(os.path.isfile(t) for t in possible_targets):
+                print('ERROR: custom_steps.py not found at any of:', possible_targets)
                 return 2
         else:
             print('Steps directory not found at', steps_dir)
