@@ -11,7 +11,7 @@ def main():
         mod = importlib.import_module('terraform_compliance')
     except Exception as e:
         print('terraform_compliance not importable:', e)
-        return 0
+        return 2
 
     try:
         site_dir = os.path.dirname(inspect.getfile(mod))
@@ -26,12 +26,17 @@ def main():
                         print(fh.read())
                 except Exception as e:
                     print('Could not read', path, e)
+            # Check specifically for our custom_steps.py and return non-zero if missing
+            target = os.path.join(steps_dir, 'custom_steps.py')
+            if not os.path.isfile(target):
+                print('ERROR: custom_steps.py not found at', target)
+                return 2
         else:
             print('Steps directory not found at', steps_dir)
-        return 0
+            return 0
     except Exception as e:
         print('Error locating terraform_compliance package:', e)
-        return 0
+        return 2
 
 
 if __name__ == '__main__':

@@ -105,25 +105,9 @@ jobs:
           pip show terraform-compliance || true
 
           echo "--- debug: verify installed custom steps BEFORE running terraform-compliance ---"
-          python "$GITHUB_WORKSPACE/.github/scripts/verify_custom_steps.py" || true
+          python "$GITHUB_WORKSPACE/.github/scripts/verify_custom_steps.py"
 
-          # Fail early if custom step isn't installed (helps surface missing-step problems)
-          python - <<'PY'
-import importlib, inspect, os, sys
-try:
-    mod = importlib.import_module('terraform_compliance')
-    site_dir = os.path.dirname(inspect.getfile(mod))
-    steps_dir = os.path.join(site_dir, 'steps')
-    target = os.path.join(steps_dir, 'custom_steps.py')
-    if not os.path.isfile(target):
-        print('ERROR: custom_steps.py not found at', target)
-        sys.exit(2)
-    else:
-        print('OK: custom_steps.py present at', target)
-except Exception as e:
-    print('ERROR: could not verify custom steps:', e)
-    sys.exit(2)
-PY
+          # Now run terraform-compliance and capture exit code properly
           terraform-compliance -p plan.json -f ../features/ 2>&1 | tee tf-compliance-output.txt
           rc=${PIPESTATUS[0]:-0}
           echo "terraform-compliance exit code: $rc"
