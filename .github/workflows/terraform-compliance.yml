@@ -70,6 +70,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install terraform-compliance
 
+      - name: Install custom step definitions into terraform-compliance site-packages
+        run: |
+          # Find site-packages for the installed terraform-compliance package
+          PY_SITE=$(python -c "import site, pkgutil, importlib.util, sys; import terraform_compliance; import inspect; print(inspect.getmodule(terraform_compliance).__file__)" 2>/dev/null || true)
+          if [ -z "$PY_SITE" ]; then
+            echo "Could not detect terraform_compliance install path; skipping custom step install"
+          else
+            SITE_DIR=$(dirname "$PY_SITE")
+            echo "Detected terraform_compliance site-dir: $SITE_DIR"
+            # Ensure steps directory exists and copy our custom steps there
+            mkdir -p "$SITE_DIR/steps"
+            cp compliance/steps/custom_steps.py "$SITE_DIR/steps/custom_steps.py" || true
+            echo "Copied custom steps into $SITE_DIR/steps"
+          fi
+
       - name: Run terraform-compliance against plan.json
         working-directory: ${{ github.event.inputs.path }}
         env:
