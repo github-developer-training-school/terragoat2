@@ -18,10 +18,11 @@ def main():
         mod_file = inspect.getfile(mod)
         site_dir = os.path.dirname(mod_file)
         steps_dir = os.path.join(site_dir, 'steps')
+        steps_given_dir = os.path.join(steps_dir, 'given')
         print('Detected terraform_compliance installation at', site_dir)
-        os.makedirs(steps_dir, exist_ok=True)
+        os.makedirs(steps_given_dir, exist_ok=True)
         src = os.path.join(os.getcwd(), 'compliance', 'steps', 'custom_steps.py')
-        dst = os.path.join(steps_dir, 'custom_steps.py')
+        dst = os.path.join(steps_given_dir, 'custom_steps.py')
         if os.path.exists(src):
             shutil.copyfile(src, dst)
             print('Copied', src, '->', dst)

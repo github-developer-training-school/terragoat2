@@ -30,14 +30,21 @@ jobs:
         run: |
           terraform init -backend=false -input=false || true
           terraform plan -out=tfplan.binary -refresh=false -input=false || true
-          # Capture terraform show output into a temp file and validate it's JSON. If not, fall back to an empty JSON object.
+          # Capture terraform show output into a temp file
           terraform show -json tfplan.binary > tfplan.tmp 2>&1 || true
-          if jq -e . tfplan.tmp >/dev/null 2>&1; then
-            mv tfplan.tmp tfplan.json
+          # Attempt to strip any leading non-JSON lines (some wrappers print the command before JSON)
+          awk 'BEGIN{p=0} { if (p==0 && $0 ~ /^[[:space:]]*[{[]/) p=1; if (p==1) print }' tfplan.tmp > tfplan.candidate || true
+          if jq -e . tfplan.candidate >/dev/null 2>&1; then
+            mv tfplan.candidate tfplan.json
           else
-            echo "Warning: terraform show did not produce valid JSON; saving raw output to tfplan.raw and using '{}' for tfplan.json" >&2
-            mv tfplan.tmp tfplan.raw || true
-            echo '{}' > tfplan.json
+            # If candidate failed, check raw tmp directly
+            if jq -e . tfplan.tmp >/dev/null 2>&1; then
+              mv tfplan.tmp tfplan.json
+            else
+              echo "Warning: terraform show did not produce valid JSON; saving raw output to tfplan.raw and using '{}' for tfplan.json" >&2
+              mv tfplan.tmp tfplan.raw || true
+              echo '{}' > tfplan.json
+            fi
           fi
 
       - name: Setup OPA

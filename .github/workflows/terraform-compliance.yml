@@ -35,7 +35,19 @@ jobs:
         id: plan
         run: |
           terraform plan -out=plan.out -refresh=false -input=false || true
-          terraform show -json plan.out > plan.json || echo '{}' > plan.json
+          terraform show -json plan.out > plan.tmp 2>&1 || true
+          # Attempt to strip leading non-JSON lines and validate
+          awk 'BEGIN{p=0} { if (p==0 && $0 ~ /^[[:space:]]*[{[]/) p=1; if (p==1) print }' plan.tmp > plan.candidate || true
+          if jq -e . plan.candidate >/dev/null 2>&1; then
+            mv plan.candidate plan.json
+          else
+            if jq -e . plan.tmp >/dev/null 2>&1; then
+              mv plan.tmp plan.json
+            else
+              mv plan.tmp plan.raw || true
+              echo '{}' > plan.json
+            fi
+          fi
 
       - name: 'Run terraform-compliance (demo)'
         # run from repository root and use GITHUB_WORKSPACE to avoid missing-directory errors
@@ -106,10 +118,10 @@ jobs:
 
           echo "--- debug: prepare local overlay for custom terraform-compliance steps ---"
           OVERLAY_DIR="$GITHUB_WORKSPACE/.tfcomp_extra"
-          mkdir -p "$OVERLAY_DIR/terraform_compliance/steps"
+          mkdir -p "$OVERLAY_DIR/terraform_compliance/steps/given"
           if [ -f "$GITHUB_WORKSPACE/compliance/steps/custom_steps.py" ]; then
-            cp "$GITHUB_WORKSPACE/compliance/steps/custom_steps.py" "$OVERLAY_DIR/terraform_compliance/steps/custom_steps.py"
-            echo "Copied custom_steps.py to overlay: $OVERLAY_DIR/terraform_compliance/steps/custom_steps.py"
+            cp "$GITHUB_WORKSPACE/compliance/steps/custom_steps.py" "$OVERLAY_DIR/terraform_compliance/steps/given/custom_steps.py"
+            echo "Copied custom_steps.py to overlay: $OVERLAY_DIR/terraform_compliance/steps/given/custom_steps.py"
           else
             echo "Warning: custom_steps.py not found in repo at compliance/steps/custom_steps.py" >&2
           fi
