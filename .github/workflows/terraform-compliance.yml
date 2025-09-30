@@ -82,6 +82,21 @@ jobs:
           fi
           # Run terraform-compliance, save output to file and print to console; propagate exit code
           set -o pipefail
+          # DEBUG: show environment and files to help diagnose no-output issues
+          echo "--- debug: pwd ---"
+          pwd
+          echo "--- debug: ls -la (working dir) ---"
+          ls -la
+          echo "--- debug: ls -la ../features ---"
+          ls -la ../features || true
+          echo "--- debug: head plan.json ---"
+          head -n 200 plan.json || true
+          echo "--- debug: head ../features/s3_must_have_environment_tag.feature ---"
+          head -n 200 ../features/s3_must_have_environment_tag.feature || true
+          echo "--- debug: python and pip info ---"
+          python -V || true
+          pip show terraform-compliance || true
+
           terraform-compliance -p plan.json -f ../features/ 2>&1 | tee tf-compliance-output.txt
           rc=${PIPESTATUS[0]:-0}
           echo "terraform-compliance exit code: $rc"
