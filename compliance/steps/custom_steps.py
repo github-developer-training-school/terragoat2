@@ -11,7 +11,7 @@ except Exception:
         return _dec
 
 
-@step(r"Given I have resource that are (.*)")
+@step(r"Given I have resource that (?:are|is) (.*)")
 def given_resources(step, resource_type=None):
     """Load plan.json and collect resources of the requested type into step.context.resources.
 
