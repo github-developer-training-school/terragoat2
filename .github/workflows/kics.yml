@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   security-events: write
+  pull-requests: write
 
 jobs:
   kics-scan:
@@ -21,14 +22,31 @@ jobs:
       - name: 'Checkout code'
         uses: actions/checkout@v3
 
+      - name: 'Prepare results directory'
+        run: mkdir -p kics-results
+
       - name: 'Run KICS Scan'
         uses: checkmarx/kics-github-action@v2.1.13
         with:
+          # Paths to scan (from workflow input)
           path: '${{ github.event.inputs.terraform_path }}'
-          output_formats: 'sarif'
-          output_path: 'kics-results.sarif'
-          # fail_on: 'high,medium'
+          # Demo: produce both JSON and SARIF outputs and write into a results dir
+          output_formats: 'json,sarif'
+          output_path: 'kics-results'
+          # Use repo-local custom queries (this project contains kics-custom-queries/...)
+          queries: 'kics-custom-queries'
+          # Demo reporting: enable PR comments, annotations and job summary
+          enable_comments: true
+          enable_annotations: true
+          enable_jobs_summary: true
+          comments_with_queries: true
+          # Make output verbose for demo purposes
+          verbose: true
+          # Keep the job from failing on results by default (safe for demo);
+          # swap to `fail_on: high,medium` if you want enforced failures
           ignore_on_exit: results
+          # Token is required to post PR comments; pass the repo token
+          token: '${{ secrets.GITHUB_TOKEN }}'
 
       - name: 'Upload KICS scan results to GitHub Security tab'
         uses: github/codeql-action/upload-sarif@v3
