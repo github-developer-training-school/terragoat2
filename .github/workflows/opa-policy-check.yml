@@ -45,6 +45,18 @@ jobs:
             echo '{}' > tfplan.json
           fi
           echo "Running OPA eval against tfplan.json using policies in ../policy/"
+          echo "--- debug: tfplan.json top-level keys ---"
+          jq 'keys' tfplan.json || true
+          echo "--- debug: resource_changes summary (address,type,actions,after.tags,after.tags_all) ---"
+          jq -c '.resource_changes[]? | {address: .address, type: .type, actions: .change.actions, after_tags: .change.after.tags, after_tags_all: .change.after.tags_all}' tfplan.json || true
+          echo "--- debug: planned_values.root_module.resources summary (address,type,values.tags,values.tags_all) ---"
+          jq -c '.planned_values.root_module.resources[]? | {address: .address, type: .type, values_tags: .values.tags, values_tags_all: .values.tags_all}' tfplan.json || true
+          echo "--- debug: policy files present in ../policy ---"
+          ls -la ../policy || true
+          echo "--- debug: head ../policy/tags.rego ---"
+          head -n 200 ../policy/tags.rego || true
+          echo "--- debug: head ../policy/demo_force_deny_universal.rego ---"
+          head -n 200 ../policy/demo_force_deny_universal.rego || true
           # Output JSON for reliable parsing, and also save a pretty text copy
           opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' -f json > opa-results.json
           # Debug: produce an explanation trace to help see why rules didn't match
