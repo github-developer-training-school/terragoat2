@@ -7,7 +7,8 @@ deny[msg] {
   resource.type == "aws_s3_bucket_acl"
   resource.change.actions == ["create"]
   acl := resource.change.after.acl
-  acl_lower := tolower(acl)
-  contains(acl_lower, "public-read")
+  # Use a case-insensitive regex match instead of tolower()/contains() so the
+  # rule works with the OPA version bundled in CI.
+  re_match("(?i)public-read", acl)
   msg := sprintf("S3 ACL '%s' sets public ACL '%s'", [resource.address, acl])
 }
