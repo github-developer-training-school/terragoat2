@@ -8,6 +8,6 @@ deny[msg] {
   resource.change.actions == ["create"]
   acl := resource.change.after.acl
   acl_lower := tolower(acl)
-  acl_lower == "public-read" or acl_lower == "public-read-write"
+  contains(acl_lower, "public-read")
   msg := sprintf("S3 ACL '%s' sets public ACL '%s'", [resource.address, acl])
 }

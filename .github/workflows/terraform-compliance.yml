@@ -53,13 +53,10 @@ jobs:
             echo '{}' > "$TF_DIR/plan.json"
           fi
 
-          # For demo: copy plan.json into repo-level features/ so terraform-compliance can use it
-          if [ -d "$ROOT/features" ]; then
-            cp "$TF_DIR/plan.json" "$ROOT/features/" || true
-            echo "Copied plan.json to features/"
-          else
-            echo "No features/ directory found at repo root; skipping copy"
-          fi
+          # Ensure features dir exists and copy plan.json there so tests can reference it
+          mkdir -p "$ROOT/features"
+          cp "$TF_DIR/plan.json" "$ROOT/features/plan.json" || true
+          echo "Copied plan.json to features/"
 
       - name: Install terraform-compliance
         run: |
@@ -68,6 +65,9 @@ jobs:
 
       - name: Run terraform-compliance against plan.json
         working-directory: ${{ github.event.inputs.path }}
+        env:
+          # Make repo root importable so custom step modules can be discovered by terraform-compliance
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           # terraform-compliance expects a plan file and a features directory. For demo we run features/ from repo root.
           if [ ! -f plan.json ]; then
