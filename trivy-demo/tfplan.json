@@ -1,0 +1,27 @@
+{
+  "format_version": "0.1",
+  "terraform_version": "1.5.0",
+  "resource_changes": [
+    {
+      "address": "aws_s3_bucket.example",
+      "module_address": null,
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "example",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "example-bucket",
+          "acl": "private",
+          "tags": {
+            "Owner": "team-a"
+          }
+        }
+      }
+    }
+  ]
+}

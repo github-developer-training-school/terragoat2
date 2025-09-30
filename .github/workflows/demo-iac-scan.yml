@@ -1,0 +1,81 @@
+name: 'Demo IaC Scan (OPA + terraform-compliance)'
+
+on:
+  workflow_dispatch:
+    inputs:
+      path:
+        description: 'Path to Terraform directory to scan (relative)'
+        required: false
+        default: 'trivy-demo'
+
+jobs:
+  demo-scan:
+    runs-on: ubuntu-latest
+    name: Demo OPA + terraform-compliance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: 'v0.45.0'
+
+      - name: Run OPA eval (demo)
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE"
+          TF_DIR="$ROOT/${{ github.event.inputs.path }}"
+          cd "$ROOT"
+          if [ ! -f "$TF_DIR/tfplan.json" ] && [ ! -f "$TF_DIR/plan.json" ]; then
+            echo "No tfplan found in $TF_DIR, creating placeholder"
+            echo '{}' > "$TF_DIR/tfplan.json"
+          fi
+          INPUT_FILE="$TF_DIR/tfplan.json"
+          if [ ! -f "$INPUT_FILE" ]; then
+            INPUT_FILE="$TF_DIR/plan.json"
+          fi
+          echo "Running opa eval against $INPUT_FILE"
+          opa eval --data policy/ --input "$INPUT_FILE" 'data.terraform.deny' -f json > demo-opa-results.json || true
+          opa eval --data policy/ --input "$INPUT_FILE" 'data.terraform.deny' --explain full -f pretty > demo-opa-explain.txt || true
+          jq '.' demo-opa-results.json > demo-opa-results.txt || cat demo-opa-results.json > demo-opa-results.txt || true
+          denys=$(jq '.[0].expressions[0].value | length' demo-opa-results.json 2>/dev/null || echo 0)
+          echo "OPA denies found: $denys"
+
+      - name: Install python deps and terraform-compliance
+        run: |
+          python -m pip install --upgrade pip
+          pip install terraform-compliance
+
+      - name: Install + verify custom terraform-compliance steps
+        run: |
+          python .github/scripts/install_custom_steps.py || true
+          python .github/scripts/verify_custom_steps.py || true
+
+      - name: Run terraform-compliance (demo)
+        run: |
+          ROOT="$GITHUB_WORKSPACE"
+          TF_DIR="$ROOT/${{ github.event.inputs.path }}"
+          cd "$TF_DIR"
+          if [ ! -f plan.json ] && [ -f tfplan.json ]; then
+            cp tfplan.json plan.json || true
+          fi
+          if [ ! -f plan.json ]; then
+            echo '{}' > plan.json
+          fi
+          # Run terraform-compliance but do not fail the job so artifacts are always uploaded
+          terraform-compliance -p plan.json -f "$ROOT/features/" 2>&1 | tee demo-tc-output.txt || true
+          echo "terraform-compliance exit code: ${PIPESTATUS[0]:-0}"
+
+      - name: Upload demo artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-iac-scan-artifacts
+          path: |
+            demo-opa-results.json
+            demo-opa-results.txt
+            demo-opa-explain.txt
+            ${{ github.event.inputs.path }}/plan.json
+            ${{ github.event.inputs.path }}/tfplan.json
+            ${{ github.event.inputs.path }}/demo-tc-output.txt
+          if-no-files-found: warn
