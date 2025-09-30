@@ -53,10 +53,17 @@ jobs:
             echo '{}' > "$TF_DIR/plan.json"
           fi
 
-          # Ensure features dir exists and copy plan.json there so tests can reference it
+          # Ensure features dir exists
           mkdir -p "$ROOT/features"
-          cp "$TF_DIR/plan.json" "$ROOT/features/plan.json" || true
-          echo "Copied plan.json to features/"
+
+          # For a failing demo: copy plan.json and remove the Environment tag from aws_s3_bucket resources
+          if [ -f "$TF_DIR/plan.json" ]; then
+            jq '(.resource_changes[] | select(.type=="aws_s3_bucket") | .change.after.tags) |= (if . == null then {} else del(.Environment) end)' "$TF_DIR/plan.json" > "$ROOT/features/plan.json" || cp "$TF_DIR/plan.json" "$ROOT/features/plan.json"
+            echo "Copied modified plan.json to features/ (Environment tag removed for demo failure)"
+          else
+            echo "No plan.json to modify; creating empty placeholder"
+            echo '{}' > "$ROOT/features/plan.json"
+          fi
 
       - name: Install terraform-compliance
         run: |
@@ -73,8 +80,12 @@ jobs:
           if [ ! -f plan.json ]; then
             echo '{}' > plan.json
           fi
-          # Run terraform-compliance and write output to a file
-          terraform-compliance -p plan.json -f ../features/ > tf-compliance-output.txt || true
+          # Run terraform-compliance, save output to file and print to console; propagate exit code
+          set -o pipefail
+          terraform-compliance -p plan.json -f ../features/ 2>&1 | tee tf-compliance-output.txt
+          rc=${PIPESTATUS[0]:-0}
+          echo "terraform-compliance exit code: $rc"
+          exit $rc
 
       - name: Upload terraform-compliance artifacts
         uses: actions/upload-artifact@v4
