@@ -40,11 +40,27 @@ jobs:
       - name: Run OPA (evaluate policy/ against plan)
         working-directory: ${{ github.event.inputs.path }}
         run: |
+          set -euo pipefail
           if [ ! -f tfplan.json ]; then
             echo '{}' > tfplan.json
           fi
-          # Evaluate policies under /policy and write results to opa-results.txt
-          opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' -f pretty > opa-results.txt || true
+          echo "Running OPA eval against tfplan.json using policies in ../policy/"
+          # Output JSON for reliable parsing, and also save a pretty text copy
+          opa eval --data ../policy/ --input tfplan.json 'data.terraform.deny' -f json > opa-results.json
+          # Pretty-print for human logs
+          jq '.' opa-results.json > opa-results.txt || cat opa-results.json > opa-results.txt
+          echo "OPA JSON result saved to opa-results.json"
+          # If denies exist, fail the step to make the CI actionable
+          denys=$(jq '.[0].expressions[0].value | length' opa-results.json 2>/dev/null || echo 0)
+          echo "denies_count=$denys"
+          if [ "${denys}" != "0" ]; then
+            echo "OPA found denies; see opa-results.txt"
+            cat opa-results.txt
+            exit 1
+          else
+            echo "No denies found by OPA"
+            cat opa-results.txt
+          fi
 
       - name: Upload OPA results
         uses: actions/upload-artifact@v4
