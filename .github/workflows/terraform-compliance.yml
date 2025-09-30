@@ -38,17 +38,27 @@ jobs:
           terraform show -json plan.out > plan.json || echo '{}' > plan.json
 
       - name: 'Run terraform-compliance (demo)'
-        working-directory: ${{ github.event.inputs.path }}
+        # run from repository root and use GITHUB_WORKSPACE to avoid missing-directory errors
         run: |
-          # If plan.json exists under trivy-demo, print a demo message and copy to root features path
-          TF_DIR=${{ github.event.inputs.path }}
+          ROOT="$GITHUB_WORKSPACE"
+          TF_DIR="${ROOT}/${{ github.event.inputs.path }}"
+
+          # Ensure the target terraform directory exists
+          mkdir -p "$TF_DIR"
+
           if [ -f "$TF_DIR/plan.json" ]; then
             echo "Found plan.json; running terraform-compliance against features/ (demo)"
-            # For demo, just output the existence and copy plan.json to artifacts
-            cp $TF_DIR/plan.json . || true
           else
             echo "No plan.json found; creating placeholder"
-            echo '{}' > $TF_DIR/plan.json
+            echo '{}' > "$TF_DIR/plan.json"
+          fi
+
+          # For demo: copy plan.json into repo-level features/ so terraform-compliance can use it
+          if [ -d "$ROOT/features" ]; then
+            cp "$TF_DIR/plan.json" "$ROOT/features/" || true
+            echo "Copied plan.json to features/"
+          else
+            echo "No features/ directory found at repo root; skipping copy"
           fi
 
       - name: Install terraform-compliance
