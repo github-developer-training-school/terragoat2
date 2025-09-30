@@ -32,9 +32,12 @@ jobs:
           terraform plan -out=tfplan.binary -refresh=false -input=false || true
           # Capture terraform show output into a temp file
           terraform show -json tfplan.binary > tfplan.tmp 2>&1 || true
-          # Attempt to strip any leading non-JSON bytes and extract JSON starting at the first '{' or '['.
-          # Use perl to be robust against leading non-JSON lines or partial prefixes.
-          perl -0777 -ne 'if (/(.*?)([\[\{].*)/s){print $2} else {print ""}' tfplan.tmp > tfplan.candidate || true
+          # Robust extraction: read plan output, find first '{' or '[' and print from there (ignores any leading printed terraform command)
+          python -c "import sys; s=open('tfplan.tmp','rb').read().decode('utf-8','ignore'); ps=[i for i in (s.find('{'),s.find('[')) if i!=-1]; sys.stdout.write('' if not ps else s[min(ps):])" > tfplan.candidate || true
+          echo "--- debug: sizes and md5 of tmp vs candidate ---"
+          wc -c tfplan.tmp || true
+          wc -c tfplan.candidate || true
+          if command -v md5sum >/dev/null 2>&1; then md5sum tfplan.tmp tfplan.candidate || true; fi
           echo "--- debug: head (first 300 bytes) of tfplan.tmp ---" || true
           head -c 300 tfplan.tmp || true
           echo "--- debug: head (first 300 bytes) of tfplan.candidate ---" || true

@@ -36,12 +36,19 @@ jobs:
         run: |
           terraform plan -out=plan.out -refresh=false -input=false || true
           terraform show -json plan.out > plan.tmp 2>&1 || true
-          # Extract JSON beginning at the first '{' or '[' using perl; this is more robust
-          perl -0777 -ne 'if (/(.*?)([\[\{].*)/s){print $2} else {print ""}' plan.tmp > plan.candidate || true
+          # If the terraform show output prints the invoked command on the same line, remove that leading prefix first
+          # (i.e. lines that look like '/home/.../terraform-bin show -json plan.out')
+          awk 'NR==1 && /terraform-bin show/ { sub(/^[^\n]*terraform-bin show[^\n]*/,"") ; print; next } { print }' plan.tmp > plan.cleaned_prefix || true
+          # Extract JSON beginning at the first '{' or '[' robustly from the cleaned file
+          python -c "import sys; s=open('plan.cleaned_prefix','rb').read().decode('utf-8','ignore'); ps=[i for i in (s.find('{'),s.find('[')) if i!=-1]; sys.stdout.write('' if not ps else s[min(ps):])" > plan.candidate || true
           echo "--- debug: head (first 300 bytes) of plan.tmp ---" || true
           head -c 300 plan.tmp || true
           echo "--- debug: head (first 300 bytes) of plan.candidate ---" || true
           head -c 300 plan.candidate || true
+          echo "--- debug: sizes and md5 of tmp vs candidate ---" || true
+          wc -c plan.tmp || true
+          wc -c plan.candidate || true
+          if command -v md5sum >/dev/null 2>&1; then md5sum plan.tmp plan.candidate || true; fi
           echo "--- debug: sizes (bytes) of plan.tmp and plan.candidate ---" || true
           wc -c plan.tmp || true
           wc -c plan.candidate || true
