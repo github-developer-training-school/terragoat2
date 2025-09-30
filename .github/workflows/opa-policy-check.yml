@@ -65,6 +65,20 @@ jobs:
           if [ ! -f tfplan.json ]; then
             echo '{}' > tfplan.json
           fi
+          # Normalize tfplan.json: if it's an array, decide whether it looks like
+          # plan-style resource_changes or show-style resources and wrap accordingly.
+          if [ "$(jq -r 'type' tfplan.json)" = "array" ]; then
+            echo "tfplan.json is an array; inspecting first element to normalize"
+            first_type=$(jq -r '.[0] | keys_unsorted[0] // ""' tfplan.json)
+            # Heuristic: if elements have 'change' or 'address' it's likely plan-style resource_changes
+            if jq -r '.[0] | has("change") or has("address")' tfplan.json | grep -q true; then
+              echo "Wrapping array as resource_changes"
+              jq '{resource_changes: .}' tfplan.json > tfplan.normalized.json && mv tfplan.normalized.json tfplan.json
+            else
+              echo "Wrapping array as planned_values.root_module.resources"
+              jq '{planned_values: {root_module: {resources: .}}}' tfplan.json > tfplan.normalized.json && mv tfplan.normalized.json tfplan.json
+            fi
+          fi
           echo "Running OPA eval against tfplan.json using policies in ../policy/"
           echo "--- debug: tfplan.json top-level keys ---"
           jq 'keys' tfplan.json || true
