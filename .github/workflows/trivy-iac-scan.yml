@@ -38,56 +38,6 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
 
-      # - name: 'Filter SARIF results (optional)'
-      #   if: ${{ always() }}
-      #   env:
-      #     # comma-separated lists. Example: TRIVY_IGNORED_RULES=TRIVY-2025-0001,TRIVY-2025-0002
-      #     TRIVY_IGNORED_RULES: ${{ env.TRIVY_IGNORED_RULES }}
-      #     TRIVY_IGNORED_TAGS: ${{ env.TRIVY_IGNORED_TAGS }}
-      #   run: |
-      #     set -euo pipefail
-      #     SARIF=trivy-results.sarif
-      #     if [ ! -f "$SARIF" ]; then
-      #       echo "No SARIF file found ($SARIF), skipping filter"
-      #       exit 0
-      #     fi
-      #     # Build JSON arrays for ignored rules and tags
-      #     rules_json='[]'
-      #     tags_json='[]'
-      #     if [ -f .trivy-ignore-rules ]; then
-      #       rules_json=$(jq -R -s -c 'split("\n")[:-1] | map(select(length>0))' .trivy-ignore-rules)
-      #     fi
-      #     if [ -n "${TRIVY_IGNORED_RULES:-}" ]; then
-      #       # merge env rules into rules_json
-      #       env_rules_json=$(printf '%s' "$TRIVY_IGNORED_RULES" | jq -R -s -c 'split(",") | map(.|gsub("^\s+|\s+$"; "")) | map(select(length>0))')
-      #       rules_json=$(jq -n --argjson a "$rules_json" --argjson b "$env_rules_json" '$a + $b | unique')
-      #     fi
-      #     if [ -n "${TRIVY_IGNORED_TAGS:-}" ]; then
-      #       tags_json=$(printf '%s' "$TRIVY_IGNORED_TAGS" | jq -R -s -c 'split(",") | map(.|gsub("^\s+|\s+$"; "")) | map(select(length>0))')
-      #     fi
-      #     if [ "$rules_json" = '[]' ] && [ "$tags_json" = '[]' ]; then
-      #       echo "No ignored rules or tags configured; skipping SARIF filter"
-      #       exit 0
-      #     fi
-      #     echo "Ignored rule IDs: $rules_json"
-      #     echo "Ignored tags: $tags_json"
-      #     # Use jq to remove results matching ignored ruleIds or tags
-      #     jq --argjson rules "$rules_json" --argjson tags "$tags_json" '
-      #       .runs |= map(
-      #         .results |= (
-      #           ( . // [] ) | map(select(
-      #             ( (try .ruleId catch null) as $rid | ($rid == null) or ( ($rules | index($rid)) | not ) ) and
-      #             ( (try .properties.tags catch null) as $tgs |
-      #                 ( if $tgs == null then true else
-      #                     ( (if ($tgs|type) == "string" then [$tgs] else $tgs end) | any( . as $tag | ($tags | index($tag)) ) | not )
-      #                   end )
-      #             )
-      #           ))
-      #         )
-      #       )
-      #     ' "$SARIF" > "$SARIF.tmp" && mv "$SARIF.tmp" "$SARIF"
-      #     echo "SARIF filtering complete"
-
     # Example: enforcement step (commented out). Uncomment to fail build on High/Critical findings
     # - name: Fail build on High/Criticial Vulnerabilities
     #   uses: aquasecurity/trivy-action@master
