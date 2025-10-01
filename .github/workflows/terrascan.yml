@@ -28,10 +28,10 @@ jobs:
           iac_type: 'terraform'
           iac_version: 'v14'
           iac_dir: '${{ github.event.inputs.terraform_path }}'
-          policy_type: 'aws'
           policy_path: 'terrascan-custom-policies'
           sarif_upload: true
-          only_warn: true
+          only_warn: true          
+          policy_type: 'aws,all' 
 
       - name: 'Upload SARIF file to GitHub Security tab'
         uses: github/codeql-action/upload-sarif@v3
