@@ -1,0 +1,5 @@
+policy:
+  # This tells Trivy to ONLY load and evaluate policies from the namespace
+  # defined in your .rego file.
+  namespaces:
+    - "trivy.custom.rules"
