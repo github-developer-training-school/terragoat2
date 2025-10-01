@@ -7,194 +7,31 @@ on:
         description: 'Path to Terraform directory to scan (relative)'
         required: false
         default: 'trivy-demo'
+permissions:
+  contents: read
 
 jobs:
-  compliance-check:
-    name: 'Run terraform-compliance'
+  terraform-compliance-scan:
+    name: 'Terraform Compliance Scan'
     runs-on: ubuntu-latest
-    env:
-      AWS_EC2_METADATA_DISABLED: 'true'
-      AWS_ACCESS_KEY_ID: 'DUMMY'
-      AWS_SECRET_ACCESS_KEY: 'DUMMY'
 
     steps:
       - name: 'Checkout code'
         uses: actions/checkout@v4
 
-      - name: 'Set up Terraform'
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.0'
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
 
-      - name: 'Terraform Init (no backend)'
-        working-directory: ${{ github.event.inputs.path }}
-        run: terraform init -backend=false -input=false
+      - name: 'Terraform Init'
+        id: init
+        run: terraform init
 
-      - name: 'Terraform Plan and Show'
-        working-directory: ${{ github.event.inputs.path }}
+      - name: 'Terraform Plan'
         id: plan
-        run: |
-          terraform plan -out=plan.out -refresh=false -input=false || true
-          terraform show -json plan.out > plan.tmp 2>&1 || true
-          # Robust extraction: use helper script to extract JSON from plan.tmp into plan.candidate
-          python .github/scripts/extract_json.py plan.tmp plan.candidate || true
-          echo "--- debug: head (first 300 bytes) of plan.tmp ---" || true
-          head -c 300 plan.tmp || true
-          echo "--- debug: head (first 300 bytes) of plan.candidate ---" || true
-          head -c 300 plan.candidate || true
-          echo "--- debug: sizes and md5 of tmp vs candidate ---" || true
-          wc -c plan.tmp || true
-          wc -c plan.candidate || true
-          if command -v md5sum >/dev/null 2>&1; then md5sum plan.tmp plan.candidate || true; fi
-          echo "--- debug: sizes (bytes) of plan.tmp and plan.candidate ---" || true
-          wc -c plan.tmp || true
-          wc -c plan.candidate || true
-          # Prefer the raw tmp if it is valid JSON, otherwise fall back to the extracted candidate
-          if jq -e . plan.tmp >/dev/null 2>&1; then
-            mv plan.tmp plan.json
-          elif jq -e . plan.candidate >/dev/null 2>&1; then
-            mv plan.candidate plan.json
-          else
-            echo "Warning: terraform show did not produce valid JSON; saving raw output to plan.raw and using '{}' for plan.json" >&2
-            mv plan.tmp plan.raw || true
-            echo '{}' > plan.json
-          fi
+        run: terraform plan -out tfplan.binary
 
-      - name: 'Run terraform-compliance (demo)'
-        # run from repository root and use GITHUB_WORKSPACE to avoid missing-directory errors
-        run: |
-          ROOT="$GITHUB_WORKSPACE"
-          TF_DIR="${ROOT}/${{ github.event.inputs.path }}"
-
-          # Ensure the target terraform directory exists
-          mkdir -p "$TF_DIR"
-
-          if [ -f "$TF_DIR/plan.json" ]; then
-            echo "Found plan.json; running terraform-compliance against features/ (demo)"
-          else
-            echo "No plan.json found; creating placeholder"
-            echo '{}' > "$TF_DIR/plan.json"
-          fi
-
-          # Ensure features dir exists
-          mkdir -p "$ROOT/features"
-
-          # For a failing demo: pick the best available plan JSON source (candidate/raw/json)
-          SOURCE=""
-          # Prefer candidate when present (even if jq initially fails we'll attempt a secondary extraction)
-          if [ -f "$TF_DIR/plan.candidate" ] && [ $(wc -c < "$TF_DIR/plan.candidate" || echo 0) -gt 10 ]; then
-            SOURCE="$TF_DIR/plan.candidate"
-          elif [ -f "$TF_DIR/plan.raw" ] && [ $(wc -c < "$TF_DIR/plan.raw" || echo 0) -gt 10 ]; then
-            SOURCE="$TF_DIR/plan.raw"
-          elif [ -f "$TF_DIR/plan.json" ] && [ $(wc -c < "$TF_DIR/plan.json" || echo 0) -gt 10 ]; then
-            SOURCE="$TF_DIR/plan.json"
-          fi
-
-          if [ -n "$SOURCE" ]; then
-            echo "Using plan source: $SOURCE"
-            echo "--- debug: head (first 300 bytes) of chosen source ---"
-            head -c 300 "$SOURCE" || true
-
-            # Try to sanitize/validate the chosen source. If jq fails, attempt a perl extraction
-            if jq -e . "$SOURCE" >/dev/null 2>&1; then
-              echo "Chosen source is valid JSON"
-              SANITIZED="$SOURCE"
-            else
-              echo "Chosen source is not valid JSON; attempting secondary extraction from raw bytes"
-              # Attempt to extract JSON starting at first { or [ and write to tmp
-              perl -0777 -ne 'if (/(.*?)([\[\{].*)/s){print $2} else {print ""}' "$SOURCE" > "$TF_DIR/plan.extracted" || true
-              echo "--- debug: head (first 300 bytes) of plan.extracted ---"
-              head -c 300 "$TF_DIR/plan.extracted" || true
-              if jq -e . "$TF_DIR/plan.extracted" >/dev/null 2>&1; then
-                echo "Extraction succeeded"
-                SANITIZED="$TF_DIR/plan.extracted"
-              else
-                echo "Extraction failed; falling back to raw source and will attempt a guarded jq transform"
-                SANITIZED="$SOURCE"
-              fi
-            fi
-
-            # Now attempt to remove Environment tags from S3 bucket resources in a guarded way
-            jq '
-              (if .resource_changes? then .resource_changes |= map(
-                if (.type=="aws_s3_bucket") then (.change.after.tags = ((.change.after.tags // {}) | del(.Environment)) ) else . end
-              ) else . end)
-              |
-              (if (.planned_values? and .planned_values.root_module?) then .planned_values.root_module.resources |= map(
-                if (.type=="aws_s3_bucket") then (.values.tags = ((.values.tags // {}) | del(.Environment)) ) else . end
-              ) else . end)
-            ' "$SANITIZED" > "$ROOT/features/plan.json" 2>/dev/null || cp "$SANITIZED" "$ROOT/features/plan.json"
-            echo "Copied modified plan (demo) to features/plan.json"
-          else
-            echo "No plan candidate/raw/json with content found; creating empty placeholder in features/plan.json"
-            echo '{}' > "$ROOT/features/plan.json"
-          fi
-
-      - name: Install terraform-compliance
-        run: |
-          python -m pip install --upgrade pip
-          pip install terraform-compliance
-
-      - name: Install custom step definitions into terraform-compliance site-packages
-        run: |
-          # Run helper script to install custom steps into site-packages
-          python .github/scripts/install_custom_steps.py || true
-
-      - name: Verify installed terraform-compliance steps
-        run: |
-          echo "Verifying terraform-compliance steps installation"
-          python .github/scripts/verify_custom_steps.py || true
-
-      - name: Run terraform-compliance against plan.json
-        working-directory: ${{ github.event.inputs.path }}
-        run: |
-          # terraform-compliance expects a plan file and a features directory. For demo we run features/ from repo root.
-          if [ ! -f plan.json ]; then
-            echo '{}' > plan.json
-          fi
-          # Run terraform-compliance, save output to file and print to console; propagate exit code
-          set -o pipefail
-          # DEBUG: show environment and files to help diagnose no-output issues
-          echo "--- debug: pwd ---"
-          pwd
-          echo "--- debug: ls -la (working dir) ---"
-          ls -la
-          echo "--- debug: ls -la ../features ---"
-          ls -la ../features || true
-          echo "--- debug: head plan.json ---"
-          head -n 200 plan.json || true
-          echo "--- debug: head ../features/s3_must_have_environment_tag.feature ---"
-          head -n 200 ../features/s3_must_have_environment_tag.feature || true
-          echo "--- debug: python and pip info ---"
-          python -V || true
-          pip show terraform-compliance || true
-
-          echo "--- debug: prepare local overlay for custom terraform-compliance steps ---"
-          OVERLAY_DIR="$GITHUB_WORKSPACE/.tfcomp_extra"
-          mkdir -p "$OVERLAY_DIR/terraform_compliance/steps/given"
-          if [ -f "$GITHUB_WORKSPACE/compliance/steps/custom_steps.py" ]; then
-            cp "$GITHUB_WORKSPACE/compliance/steps/custom_steps.py" "$OVERLAY_DIR/terraform_compliance/steps/given/custom_steps.py"
-            echo "Copied custom_steps.py to overlay: $OVERLAY_DIR/terraform_compliance/steps/given/custom_steps.py"
-          else
-            echo "Warning: custom_steps.py not found in repo at compliance/steps/custom_steps.py" >&2
-          fi
-
-          echo "--- debug: run terraform-compliance with PYTHONPATH overlay ---"
-          PYTHONPATH="$OVERLAY_DIR:$PYTHONPATH" terraform-compliance -p plan.json -f ../features/ 2>&1 | tee tf-compliance-output.txt
-          rc=${PIPESTATUS[0]:-0}
-          echo "terraform-compliance exit code: $rc"
-          exit $rc
-
-      - name: Upload terraform-compliance artifacts
-        uses: actions/upload-artifact@v4
+      - name: 'Run Terraform Compliance'
+        uses: terraform-compliance/github-action@v0.3.0
         with:
-          name: terraform-compliance-artifacts
-          path: |
-            ${{ github.event.inputs.path }}/plan.json
-            ${{ github.event.inputs.path }}/tf-compliance-output.txt
-            ${{ github.event.inputs.path }}/plan.candidate
-            ${{ github.event.inputs.path }}/plan.raw
-            ${{ github.event.inputs.path }}/plan.extracted
-            ${{ github.event.inputs.path }}/plan.tmp
-          if-no-files-found: warn
-
+          plan-file: './tfplan.binary'
+          feature-file: 'features' # Directory containing your .feature files
